@@ -1391,7 +1391,6 @@ let isAudioReloading = false; // 新增：防止重复触发音频重载
 let permissionCheckTimeout = null; // 新增：权限检测超时
 const debugParams = new URLSearchParams(window.location.search);
 const HULUSI_DEBUG_MODE = debugParams.get('debug') === 'hulusi' || debugParams.has('hulusiDebug');
-let runtimeInteractionsEnabled = false;
 
 // ====================================================================
 // AR 合成器/鼓机平台配置
@@ -1836,10 +1835,6 @@ function addRuntimeControlListeners(component) {
     window.addEventListener('touchend', component.handlePointerUp, runtimeControlEventOptions);
     window.addEventListener('pointercancel', component.handlePointerUp, runtimeControlEventOptions);
     window.addEventListener('touchcancel', component.handlePointerUp, runtimeControlEventOptions);
-}
-
-function canHandleRuntimeInput() {
-    return runtimeInteractionsEnabled && isARStarted;
 }
 
 function removeRuntimeControlListeners(component) {
@@ -3908,7 +3903,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     },
 
     handlePointerDown: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
         if (isRuntimeUiEvent(evt)) return;
@@ -3954,7 +3948,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     },
 
     handlePointerMove: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible') || modelGestureMode !== 'interact') return;
         if (isRuntimeUiEvent(evt)) return;
         const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
@@ -3982,7 +3975,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     },
 
     handlePointerUp: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (isRuntimeUiEvent(evt)) return;
         const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
         if (this.playMode === 'real') {
@@ -4007,7 +3999,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     },
 
     handleClick: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
         if (this.playMode === 'real') return;
@@ -4444,7 +4435,6 @@ AFRAME.registerComponent('runtime-synth-workstation', {
     },
 
     handlePointerDown: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible')) return;
         if (modelGestureMode !== 'interact') return;
         if (!this.raycaster || !this.mouse) { console.warn('raycaster/mouse not ready'); return; }
@@ -4492,7 +4482,6 @@ AFRAME.registerComponent('runtime-synth-workstation', {
     },
 
     handlePointerMove: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible')) { this.dragState = null; return; }
         if (!this.dragState) return;
         if (evt.preventDefault) evt.preventDefault();
@@ -4509,7 +4498,6 @@ AFRAME.registerComponent('runtime-synth-workstation', {
     },
 
     handlePointerUp: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         runtimeControlPointerActive = false;
         const pointerId = getRuntimePointerId(evt);
         pointerUp(pointerId);
@@ -4522,7 +4510,6 @@ AFRAME.registerComponent('runtime-synth-workstation', {
     },
 
     handleClick: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible')) return;
         if (modelGestureMode !== 'interact') return;
         if (Date.now() < this.pointerHandledUntil) return;
@@ -4847,7 +4834,6 @@ AFRAME.registerComponent('runtime-drum-machine', {
     },
 
     handlePointerDown: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible')) return;
         if (modelGestureMode !== 'interact') return;
         if (!this.raycaster || !this.mouse) { console.warn('raycaster/mouse not ready'); return; }
@@ -4890,7 +4876,6 @@ AFRAME.registerComponent('runtime-drum-machine', {
     },
 
     handlePointerMove: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible')) { this.dragState = null; return; }
         if (!this.dragState) return;
         if (evt.preventDefault) evt.preventDefault();
@@ -4906,7 +4891,6 @@ AFRAME.registerComponent('runtime-drum-machine', {
     },
 
     handlePointerUp: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         runtimeControlPointerActive = false;
         if (this.activePressMesh) {
             flashRuntimeMesh(this.activePressMesh, false, 0.018);
@@ -4918,7 +4902,6 @@ AFRAME.registerComponent('runtime-drum-machine', {
     },
 
     handleClick: function (evt) {
-        if (!canHandleRuntimeInput()) return;
         if (!this.el.getAttribute('visible')) return;
         if (modelGestureMode !== 'interact') return;
         if (Date.now() < this.pointerHandledUntil) return;
@@ -5298,8 +5281,7 @@ AFRAME.registerComponent('touch-handler', {
         return currentAudioManager && currentAudioManager.markerId === this.markerId;
     },
     canRotateModel: function () {
-        return canHandleRuntimeInput() &&
-            !runtimeControlPointerActive &&
+        return !runtimeControlPointerActive &&
             modelGestureMode === 'rotate' &&
             this.isThisMarkerActive() &&
             this.el.getAttribute('visible');
@@ -5337,7 +5319,6 @@ AFRAME.registerComponent('touch-handler', {
         e.preventDefault();
     },
     onTouchStart: function (e) {
-        if (!canHandleRuntimeInput()) return;
         if (runtimeControlPointerActive || modelGestureMode !== 'rotate') {
             this.isDragging = false;
             this.isPinching = false;
@@ -5951,7 +5932,6 @@ function createStartOverlay() {
 async function startAR() {
     if (isARStarted) return;
     console.log('启动AR体验');
-    runtimeInteractionsEnabled = false;
     
     // 检查权限状态
     const permissionStatus = await checkCameraPermission();
@@ -5977,7 +5957,6 @@ async function startAR() {
 
     // 权限正常，启动AR
     isARStarted = true;
-    runtimeInteractionsEnabled = true;
     startOverlay.classList.add('hidden');
     document.getElementById('ar-scene').classList.add('active');
     document.getElementById('dock-container').classList.add('active');
@@ -6092,7 +6071,6 @@ function retryPermission() {
     if (deniedUI) deniedUI.remove();
     hidePermissionErrorOverlay();
     isARStarted = false;
-    runtimeInteractionsEnabled = false;
     startAR();
 }
 
@@ -6108,7 +6086,6 @@ function setupHulusiDebugMode() {
 
     console.log('启动葫芦丝无扫码调试模式');
     isARStarted = true;
-    runtimeInteractionsEnabled = true;
     startOverlay?.classList.add('hidden');
     scene.classList.add('active');
     document.getElementById('dock-container')?.classList.add('active');
@@ -6186,7 +6163,6 @@ function backToStart() {
     if (dockContainer) dockContainer.classList.remove('active');
     startOverlay.classList.remove('hidden');
     isARStarted = false;
-    runtimeInteractionsEnabled = false;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
