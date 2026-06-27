@@ -2704,12 +2704,13 @@ function saveHulusiCalibration(calibration) {
 }
 
 const HULUSI_HOLES = [
-    { id: 0, label: '低音5', note: 'G4', midi: 67, xRatio: 0.28, yOffset: 0.00 },
-    { id: 1, label: '低音6', note: 'A4', midi: 69, xRatio: 0.41, yOffset: 0.00 },
-    { id: 2, label: '低音7', note: 'B4', midi: 71, xRatio: 0.53, yOffset: 0.00 },
-    { id: 3, label: '中音1', note: 'C5', midi: 72, xRatio: 0.59, yOffset: 0.00 },
-    { id: 4, label: '中音2', note: 'D5', midi: 74, xRatio: 0.70, yOffset: 0.00 },
-    { id: 5, label: '中音3', note: 'E5', midi: 76, xRatio: 0.82, yOffset: 0.00 }
+    { id: 0, display: 1, label: '中音4', note: 'F5', midi: 77, xRatio: 0.28, yOffset: 0.00 },
+    { id: 1, display: 2, label: '中音3', note: 'E5', midi: 76, xRatio: 0.41, yOffset: 0.00 },
+    { id: 2, display: 3, label: '中音2', note: 'D5', midi: 74, xRatio: 0.53, yOffset: 0.00 },
+    { id: 3, display: 4, label: '中音1', note: 'C5', midi: 72, xRatio: 0.59, yOffset: 0.00 },
+    { id: 4, display: 5, label: '低音7', note: 'B4', midi: 71, xRatio: 0.70, yOffset: 0.00 },
+    { id: 5, display: 6, label: '低音6', note: 'A4', midi: 69, xRatio: 0.82, yOffset: 0.00 },
+    { id: 6, display: 7, label: '低音5', note: 'G4', midi: 67, xRatio: 0.94, yOffset: 0.00 }
 ];
 const HULUSI_HOLE_MESH_NAME_HINT = '001001';
 const HULUSI_HIT_MESH_DEBUG = true;
@@ -2719,14 +2720,15 @@ const HULUSI_HOLE_HIT_WIDTH_SCALE = 2.05;
 const HULUSI_HOLE_HIT_HEIGHT_SCALE = 1.75;
 const HULUSI_HOLE_NUMBER_LABELS = true;
 const HULUSI_CALIBRATION_STORAGE_KEY = 'hulusiHoleCalibration.v1';
-const HULUSI_HOLE_COUNT = 6;
+const HULUSI_HOLE_COUNT = HULUSI_HOLES.length;
 const HULUSI_DEFAULT_CALIBRATION = {
     0: { dx: 28.31, dy: 0, dz: -1.51, scale: 1 },
     1: { dx: 26.59, dy: 0, dz: -1.51, scale: 1 },
     2: { dx: 17.16, dy: 0, dz: -1.51, scale: 1 },
     3: { dx: 24.02, dy: 0, dz: -1.51, scale: 1 },
     4: { dx: 20.59, dy: 0, dz: -1.51, scale: 1 },
-    5: { dx: 18.01, dy: 0, dz: -1.51, scale: 1 }
+    5: { dx: 18.01, dy: 0, dz: -1.51, scale: 1 },
+    6: { dx: 18.01, dy: 0, dz: -1.51, scale: 1 }
 };
 const HULUSI_DEBUG_MODEL_DEFAULT = {
     position: { x: 0, y: 0.10, z: -4.8 },
@@ -2764,66 +2766,33 @@ function clampHulusiValue(value, min, max) {
 }
 
 function hulusiDisplayNumberForHoleId(holeId) {
-    return HULUSI_HOLE_COUNT - holeId;
+    return HULUSI_HOLES.find((hole) => hole.id === holeId)?.display || holeId + 1;
 }
 
 function hulusiHoleIdForDisplayNumber(displayNumber) {
-    return HULUSI_HOLE_COUNT - displayNumber;
+    return HULUSI_HOLES.find((hole) => hole.display === displayNumber)?.id ?? Math.max(0, displayNumber - 1);
 }
 
-const HULUSI_FINGERING_NOTES = [
-    { label: '低音5', note: 'G4', midi: 67 },
-    { label: '低音6', note: 'A4', midi: 69 },
-    { label: '低音7', note: 'B4', midi: 71 },
-    { label: '中音1', note: 'C5', midi: 72 },
-    { label: '中音2', note: 'D5', midi: 74 },
-    { label: '中音3', note: 'E5', midi: 76 },
-    { label: '中音5', note: 'G5', midi: 79 }
-];
+function getHulusiBaseMidi() {
+    return HULUSI_HOLES[HULUSI_HOLES.length - 1].midi;
+}
 
-// Tone-hole physics: the first open hole from the reed end sets effective bore length.
-function getHulusiFingeringNote(closedDisplayHoles) {
-    const closed = closedDisplayHoles || new Set();
-    let firstOpenHole = 0;
-    for (let display = HULUSI_HOLE_COUNT; display >= 1; display--) {
-        if (!closed.has(display)) {
-            firstOpenHole = display;
-            break;
-        }
-    }
-
-    const noteIndexByFirstOpen = {
-        0: 0,
-        1: 1,
-        2: 2,
-        3: 3,
-        4: 4,
-        5: 5,
-        6: 6
-    };
-    const note = HULUSI_FINGERING_NOTES[noteIndexByFirstOpen[firstOpenHole]];
-    const downstreamClosed = firstOpenHole === 0
-        ? 0
-        : Array.from(closed).filter((display) => display < firstOpenHole).length;
-    const isCrossFingering = downstreamClosed > 0;
-    const cents = isCrossFingering ? -Math.min(38, downstreamClosed * 9) : 0;
-    const midi = note.midi + cents / 100;
-    const baseFreq = midiToFrequencyPlain(HULUSI_FINGERING_NOTES[0].midi);
-    const freq = midiToFrequencyPlain(midi);
+function getHulusiDemoNote(displayNumber) {
+    const hole = HULUSI_HOLES.find((item) => item.display === displayNumber) || HULUSI_HOLES[0];
+    const baseFreq = midiToFrequencyPlain(getHulusiBaseMidi());
+    const freq = midiToFrequencyPlain(hole.midi);
 
     return {
-        ...note,
-        midi,
-        label: isCrossFingering ? `${note.label}*` : note.label,
-        firstOpenHole,
-        downstreamClosed,
-        isCrossFingering,
+        ...hole,
+        displayNumber: hole.display,
+        downstreamClosed: 0,
+        isCrossFingering: false,
         effectiveLengthRatio: baseFreq / freq
     };
 }
 
 function normalizeHulusiFingeringInput(input) {
-    const baseMidi = HULUSI_FINGERING_NOTES[0].midi;
+    const baseMidi = getHulusiBaseMidi();
     if (input && typeof input === 'object' && Number.isFinite(input.midi)) {
         const freq = midiToFrequencyPlain(input.midi);
         const baseFreq = midiToFrequencyPlain(baseMidi);
@@ -3137,6 +3106,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.calibration = loadHulusiCalibration();
         this.active = new Map();
         this.closedDisplayHoles = new Set();
+        this.currentDisplayNumber = null;
         this.currentVoice = null;
         this.currentFingering = null;
         this.pointerHandledUntil = 0;
@@ -3238,6 +3208,36 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         const key = String(holeId);
         if (!this.calibration[key]) {
             this.calibration[key] = { dx: 0, dy: 0, dz: 0, scale: 1 };
+        }
+        if (holeId === 6 && this.calibration[key].dx === HULUSI_DEFAULT_CALIBRATION[6].dx) {
+            const currentBase = this.holeLayout.get(6);
+            const previousBase = this.holeLayout.get(5);
+            const beforePreviousBase = this.holeLayout.get(4);
+            const previousCalibration = this.calibration['5'] || HULUSI_DEFAULT_CALIBRATION[5];
+            const beforePreviousCalibration = this.calibration['4'] || HULUSI_DEFAULT_CALIBRATION[4];
+            if (currentBase && previousBase && beforePreviousBase) {
+                const previous = {
+                    x: previousBase.x + previousCalibration.dx,
+                    y: previousBase.y + previousCalibration.dy,
+                    z: previousBase.z + previousCalibration.dz
+                };
+                const beforePrevious = {
+                    x: beforePreviousBase.x + beforePreviousCalibration.dx,
+                    y: beforePreviousBase.y + beforePreviousCalibration.dy,
+                    z: beforePreviousBase.z + beforePreviousCalibration.dz
+                };
+                const target = {
+                    x: previous.x + (previous.x - beforePrevious.x),
+                    y: previous.y + (previous.y - beforePrevious.y),
+                    z: previous.z + (previous.z - beforePrevious.z)
+                };
+                this.calibration[key] = {
+                    ...this.calibration[key],
+                    dx: target.x - currentBase.x,
+                    dy: target.y - currentBase.y,
+                    dz: target.z - currentBase.z
+                };
+            }
         }
         return this.calibration[key];
     },
@@ -3342,8 +3342,25 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.setHoleActive(holeId, closed);
     },
 
-    updateFingeringVoice: function () {
-        const fingering = getHulusiFingeringNote(this.closedDisplayHoles);
+    isDisplayHeldByAnother: function (displayNumber, ignorePointerId = null) {
+        for (const [pointerId, held] of this.active.entries()) {
+            if (pointerId !== ignorePointerId && held.displayNumber === displayNumber) return true;
+        }
+        return false;
+    },
+
+    updateFingeringVoice: function (displayNumber = null) {
+        if (displayNumber) this.currentDisplayNumber = displayNumber;
+        if (!this.currentDisplayNumber || !this.closedDisplayHoles.has(this.currentDisplayNumber)) {
+            const heldDisplays = Array.from(this.closedDisplayHoles);
+            this.currentDisplayNumber = heldDisplays.length ? heldDisplays[heldDisplays.length - 1] : null;
+        }
+        if (!this.currentDisplayNumber) {
+            this.releaseFingeringVoiceIfOpen();
+            return;
+        }
+
+        const fingering = getHulusiDemoNote(this.currentDisplayNumber);
         const stateText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
             const display = i + 1;
             return this.closedDisplayHoles.has(display) ? display : '○';
@@ -3354,7 +3371,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             setHulusiVoicePitch(this.currentVoice, fingering);
         }
         this.currentFingering = fingering;
-        showNotification(`葫芦丝 ${fingering.label} (${fingering.note})  触摸 ${stateText}`);
+        showNotification(`葫芦丝 孔${fingering.displayNumber} ${fingering.label} (${fingering.note})  触摸 ${stateText}`);
     },
 
     releaseFingeringVoiceIfOpen: function () {
@@ -3362,6 +3379,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         if (this.currentVoice) releaseHulusiVoice(this.currentVoice);
         this.currentVoice = null;
         this.currentFingering = null;
+        this.currentDisplayNumber = null;
     },
 
     clearFingering: function (force = true) {
@@ -3373,6 +3391,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force });
         this.currentVoice = null;
         this.currentFingering = null;
+        this.currentDisplayNumber = null;
     },
 
     raycastInteractives: function (evt) {
@@ -3407,27 +3426,34 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         const displayNumber = hulusiDisplayNumberForHoleId(interaction.id);
         this.active.set(pointerId, { holeId: interaction.id, displayNumber });
         this.setHoleClosedByDisplay(displayNumber, true);
-        this.updateFingeringVoice();
+        this.updateFingeringVoice(displayNumber);
     },
 
     slideHole: function (pointerId, interaction) {
         const held = this.active.get(pointerId);
         if (!held || held.holeId === interaction.id) return;
-        this.setHoleClosedByDisplay(held.displayNumber, false);
+        const previousDisplay = held.displayNumber;
+        if (!this.isDisplayHeldByAnother(previousDisplay, pointerId)) {
+            this.setHoleClosedByDisplay(previousDisplay, false);
+        }
         held.holeId = interaction.id;
         held.displayNumber = hulusiDisplayNumberForHoleId(interaction.id);
         this.setHoleClosedByDisplay(held.displayNumber, true);
-        this.updateFingeringVoice();
+        this.updateFingeringVoice(held.displayNumber);
     },
 
     stopHole: function (pointerId, force = false) {
         const held = this.active.get(pointerId);
         if (!held) return;
-        this.setHoleClosedByDisplay(held.displayNumber, false);
         this.active.delete(pointerId);
+        if (!this.isDisplayHeldByAnother(held.displayNumber)) {
+            this.setHoleClosedByDisplay(held.displayNumber, false);
+        }
+        if (this.currentDisplayNumber === held.displayNumber) this.currentDisplayNumber = null;
         if (force && this.currentVoice) {
             releaseHulusiVoice(this.currentVoice, { force: true });
             this.currentVoice = null;
+            this.currentDisplayNumber = null;
         } else {
             this.releaseFingeringVoiceIfOpen();
             if (this.closedDisplayHoles.size > 0) this.updateFingeringVoice();
@@ -3520,7 +3546,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         const displayNumber = hulusiDisplayNumberForHoleId(hit.interaction.id);
         const nextClosed = !this.closedDisplayHoles.has(displayNumber);
         this.setHoleClosedByDisplay(displayNumber, nextClosed);
-        if (this.closedDisplayHoles.size > 0) this.updateFingeringVoice();
+        if (this.closedDisplayHoles.size > 0) this.updateFingeringVoice(nextClosed ? displayNumber : null);
         else this.releaseFingeringVoiceIfOpen();
     },
 
@@ -5681,6 +5707,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <button class="hulusi-calibration-button" data-hulusi-hole="4" onclick="selectHulusiCalibrationDisplay(4)">4</button>
       <button class="hulusi-calibration-button" data-hulusi-hole="5" onclick="selectHulusiCalibrationDisplay(5)">5</button>
       <button class="hulusi-calibration-button" data-hulusi-hole="6" onclick="selectHulusiCalibrationDisplay(6)">6</button>
+      <button class="hulusi-calibration-button" data-hulusi-hole="7" onclick="selectHulusiCalibrationDisplay(7)">7</button>
       <span id="hulusi-calibration-readout" class="hulusi-calibration-readout">孔 1 x:0 y:0 z:0 size:1</span>
     </div>
     <div class="hulusi-calibration-row">
