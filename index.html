@@ -2778,12 +2778,27 @@ const HULUSI_FINGERING_NOTES = [
 ];
 
 function getHulusiFingeringNote(closedDisplayHoles) {
-    let selectedFromBottom = 0;
-    for (let display = 1; display <= HULUSI_HOLE_COUNT; display++) {
-        if (!closedDisplayHoles.has(display)) break;
-        selectedFromBottom++;
+    if (!closedDisplayHoles || closedDisplayHoles.size === 0) {
+        return HULUSI_FINGERING_NOTES[6];
     }
-    return HULUSI_FINGERING_NOTES[Math.min(selectedFromBottom, HULUSI_FINGERING_NOTES.length - 1)];
+
+    const closed = Array.from(closedDisplayHoles).sort((a, b) => a - b);
+    const key = closed.join('');
+    const exact = {
+        '123456': 0,
+        '23456': 1,
+        '3456': 2,
+        '456': 3,
+        '56': 4,
+        '6': 5,
+        '': 6
+    };
+    if (Object.prototype.hasOwnProperty.call(exact, key)) {
+        return HULUSI_FINGERING_NOTES[exact[key]];
+    }
+
+    const lowestClosed = Math.min(...closed);
+    return HULUSI_FINGERING_NOTES[Math.max(0, Math.min(6, lowestClosed - 1))];
 }
 
 function createHulusiVoice(midi, velocity = 0.82) {
