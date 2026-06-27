@@ -1642,6 +1642,14 @@ function getRuntimePointerFromTouch(touch) {
     };
 }
 
+function isRuntimeUiEvent(evt) {
+    const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
+    const target = source.target || evt.target;
+    return Boolean(target && target.closest && target.closest(
+        '#dock-container, #hulusi-calibration-panel, #hulusi-calibration-toggle, #info-panel, #start-overlay, #loading-overlay'
+    ));
+}
+
 const runtimeControlEventOptions = { capture: true, passive: false };
 const runtimeControlClickOptions = { capture: true };
 const runtimeTouchHitPadding = 34;
@@ -1808,11 +1816,11 @@ function isPointerInsideRuntimeBox(pointer, box, padding = runtimeTouchHitPaddin
         pointer.y <= box.bottom + padding;
 }
 
-function findRuntimeScreenSpaceHit(interactives, camera, canvasRect, pointer) {
+function findRuntimeScreenSpaceHit(interactives, camera, canvasRect, pointer, padding = runtimeTouchHitPadding) {
     let best = null;
     for (const object of interactives) {
         const box = getRuntimeObjectScreenBox(object, camera, canvasRect);
-        if (!box || !isPointerInsideRuntimeBox(pointer, box)) continue;
+        if (!box || !isPointerInsideRuntimeBox(pointer, box, padding)) continue;
         const dx = pointer.x - box.centerX;
         const dy = pointer.y - box.centerY;
         const score = Math.sqrt(dx * dx + dy * dy) + box.area * 0.0005;
@@ -3265,7 +3273,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         const { pointer, canvasRect } = setRuntimeRaycasterFromEvent(this.raycaster, this.mouse, this.el.sceneEl, camera, evt);
         const rayHit = getRuntimeRaycastHit(this.raycaster, this.interactives);
         if (rayHit) return rayHit;
-        return findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer);
+        return findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer, 10);
     },
 
     raycastAtPointer: function (pointer) {
@@ -3280,7 +3288,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.raycaster.setFromCamera(this.mouse, camera);
         const rayHit = getRuntimeRaycastHit(this.raycaster, this.interactives);
         if (rayHit) return rayHit;
-        return findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer);
+        return findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer, 10);
     },
 
     startHole: function (pointerId, interaction) {
@@ -3320,7 +3328,9 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     handlePointerDown: function (evt) {
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
+        if (isRuntimeUiEvent(evt)) return;
         const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
+        if ((evt.type === 'pointerdown' || evt.type === 'mousedown') && Date.now() < this.pointerHandledUntil) return;
         if (source.changedTouches && source.changedTouches.length) {
             let handled = false;
             Array.from(source.changedTouches).forEach((touch) => {
@@ -3349,6 +3359,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     handlePointerMove: function (evt) {
         if (!this.el.getAttribute('visible') || modelGestureMode !== 'interact') return;
+        if (isRuntimeUiEvent(evt)) return;
         const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
         if (source.changedTouches && source.changedTouches.length) {
             let handled = false;
@@ -3374,6 +3385,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     },
 
     handlePointerUp: function (evt) {
+        if (isRuntimeUiEvent(evt)) return;
         const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
         if (source.changedTouches && source.changedTouches.length) {
             Array.from(source.changedTouches).forEach((touch) => this.stopHole(`touch-${touch.identifier}`));
@@ -3389,6 +3401,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     handleClick: function (evt) {
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
+        if (isRuntimeUiEvent(evt)) return;
         if (Date.now() < this.pointerHandledUntil) return;
         const hit = this.raycastInteractives(evt);
         if (!hit || hit.interaction.kind !== 'hulusi-hole') return;
