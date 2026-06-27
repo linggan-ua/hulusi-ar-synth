@@ -2917,7 +2917,6 @@ const HULUSI_REAL_FINGERINGS = [
 ];
 let hulusiPlayMode = localStorage.getItem(HULUSI_PLAY_MODE_STORAGE_KEY) === 'real' ? 'real' : 'demo';
 let hulusiRealFingeringStates = loadHulusiRealFingeringStates();
-let activeHulusiVoice = null;
 
 function midiToFrequencyPlain(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);
@@ -3119,9 +3118,6 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 
     const now = ctx.currentTime;
-    if (activeHulusiVoice && !activeHulusiVoice.released) {
-        releaseHulusiVoice(activeHulusiVoice, { force: true, quick: true });
-    }
     const fingering = normalizeHulusiFingeringInput(fingeringInput);
     const midi = fingering.midi;
     const freq = midiToFrequencyPlain(midi);
@@ -3175,10 +3171,10 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     pressureGain.connect(reedGain.gain);
 
     reedGain.gain.setValueAtTime(0.0001, now);
-    reedGain.gain.linearRampToValueAtTime(acoustic.reedAttack * 0.82, now + 0.070);
-    reedGain.gain.setTargetAtTime(acoustic.reedSustain * 0.90, now + 0.12, 0.20);
+    reedGain.gain.linearRampToValueAtTime(acoustic.reedAttack, now + 0.045);
+    reedGain.gain.setTargetAtTime(acoustic.reedSustain, now + 0.09, 0.18);
     subGain.gain.setValueAtTime(0.0001, now);
-    subGain.gain.linearRampToValueAtTime(acoustic.octaveAttack * 0.82, now + 0.095);
+    subGain.gain.linearRampToValueAtTime(acoustic.octaveAttack, now + 0.075);
     subGain.gain.setTargetAtTime(acoustic.octaveSustain, now + 0.18, 0.22);
     droneGain.gain.setValueAtTime(0.0001, now);
     droneGain.gain.linearRampToValueAtTime(0.030 * velocity, now + 0.18);
@@ -3189,7 +3185,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     breathSource.buffer = makeNoiseBuffer(ctx, 2.4);
     chiffSource.buffer = makeNoiseBuffer(ctx, 0.18);
     breathGain.gain.setValueAtTime(0.0001, now);
-    breathGain.gain.linearRampToValueAtTime(acoustic.breathPeak * 0.72, now + 0.055);
+    breathGain.gain.linearRampToValueAtTime(acoustic.breathPeak, now + 0.028);
     breathGain.gain.setTargetAtTime(acoustic.breathSustain, now + 0.16, 0.45);
     breathHighpass.type = 'highpass';
     breathHighpass.frequency.value = 780;
@@ -3197,8 +3193,8 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     breathBandpass.frequency.value = 1850;
     breathBandpass.Q.value = 0.9;
     chiffGain.gain.setValueAtTime(0.001, now);
-    chiffGain.gain.linearRampToValueAtTime(0.034 * velocity, now + 0.018);
-    chiffGain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+    chiffGain.gain.linearRampToValueAtTime(0.11 * velocity, now + 0.012);
+    chiffGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
     chiffBandpass.type = 'bandpass';
     chiffBandpass.frequency.value = acoustic.chiffFrequency;
     chiffBandpass.Q.value = 1.8;
@@ -3220,8 +3216,8 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     airLowpass.Q.value = 0.72;
 
     output.gain.setValueAtTime(0.0001, now);
-    output.gain.linearRampToValueAtTime(0.54, now + 0.070);
-    output.gain.setTargetAtTime(0.46, now + 0.14, 0.30);
+    output.gain.linearRampToValueAtTime(0.72, now + 0.035);
+    output.gain.setTargetAtTime(0.58, now + 0.12, 0.28);
 
     oscillator.connect(reedGain);
     subOscillator.connect(subGain);
@@ -3254,7 +3250,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     pressure.start(now);
 
     state.lastFreq = freq;
-    const voice = {
+    return {
         source: oscillator,
         oscillator,
         subOscillator,
@@ -3281,12 +3277,10 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
         pressureGain,
         fingering,
         velocity,
-        minHoldUntil: now + 0.035,
+        minHoldUntil: now + 0.12,
         released: false,
         releaseTimer: 0
     };
-    activeHulusiVoice = voice;
-    return voice;
 }
 
 function setHulusiVoicePitch(voice, fingeringInput) {
@@ -3316,7 +3310,7 @@ function setHulusiVoicePitch(voice, fingeringInput) {
 function releaseHulusiVoice(voice, options = {}) {
     if (!voice || !audioCtx || voice.released) return;
     const now = audioCtx.currentTime;
-    const wait = (options.force || options.quick) ? 0 : Math.max(0, (voice.minHoldUntil || now) - now);
+    const wait = options.force ? 0 : Math.max(0, (voice.minHoldUntil || now) - now);
     if (wait > 0.005) {
         if (!voice.releaseTimer) {
             voice.releaseTimer = window.setTimeout(() => releaseHulusiVoice(voice, { ...options, force: true }), wait * 1000);
@@ -3330,22 +3324,18 @@ function releaseHulusiVoice(voice, options = {}) {
     }
     try {
         voice.gain.gain.cancelScheduledValues(now);
-        const releaseTau = (options.force || options.quick) ? 0.012 : 0.045;
-        const stopDelay = (options.force || options.quick) ? 0.060 : 0.14;
-        voice.gain.gain.setTargetAtTime(0.0001, now, releaseTau);
-        voice.reedGain?.gain.setTargetAtTime(0.0001, now, releaseTau);
-        voice.subGain?.gain.setTargetAtTime(0.0001, now, releaseTau);
-        voice.droneGain?.gain.setTargetAtTime(0.0001, now, releaseTau * 1.5);
-        voice.breathGain?.gain.setTargetAtTime(0.0001, now, releaseTau);
-        voice.chiffGain?.gain.setTargetAtTime(0.0001, now, 0.006);
-        voice.source.stop(now + stopDelay);
-        voice.subOscillator?.stop(now + stopDelay);
-        voice.droneOscillator?.stop(now + stopDelay + 0.03);
-        voice.breathSource?.stop(now + stopDelay);
-        voice.vibrato?.stop(now + stopDelay);
-        voice.pressure?.stop(now + stopDelay);
+        voice.gain.gain.setTargetAtTime(0.0001, now, options.force ? 0.025 : 0.06);
+        voice.reedGain?.gain.setTargetAtTime(0.0001, now, 0.05);
+        voice.subGain?.gain.setTargetAtTime(0.0001, now, 0.05);
+        voice.droneGain?.gain.setTargetAtTime(0.0001, now, 0.08);
+        voice.breathGain?.gain.setTargetAtTime(0.0001, now, 0.035);
+        voice.source.stop(now + 0.16);
+        voice.subOscillator?.stop(now + 0.16);
+        voice.droneOscillator?.stop(now + 0.20);
+        voice.breathSource?.stop(now + 0.16);
+        voice.vibrato?.stop(now + 0.16);
+        voice.pressure?.stop(now + 0.16);
     } catch (err) {}
-    if (activeHulusiVoice === voice) activeHulusiVoice = null;
     window.setTimeout(() => {
         try {
             voice.source.disconnect();
@@ -3707,7 +3697,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     releaseFingeringVoiceIfOpen: function () {
         if (this.closedDisplayHoles.size > 0) return;
-        if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { quick: true });
+        if (this.currentVoice) releaseHulusiVoice(this.currentVoice);
         this.currentVoice = null;
         this.currentFingering = null;
         this.currentDisplayNumber = null;
@@ -3729,7 +3719,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     startRealFingering: function (pointerId) {
         unlockAudio();
-        if (this.realPointerId === pointerId && this.currentVoice && !this.currentVoice.released) return;
         this.realPointerId = pointerId;
         const fingering = getHulusiRealFingeringNote(hulusiRealFingeringStates);
         if (!this.currentVoice) {
@@ -3747,7 +3736,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     stopRealFingering: function (pointerId = null, force = false) {
         if (pointerId !== null && this.realPointerId !== null && pointerId !== this.realPointerId) return;
-        if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force, quick: true });
+        if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force });
         this.currentVoice = null;
         this.currentFingering = null;
         this.realPointerId = null;
@@ -3781,7 +3770,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     startHole: function (pointerId, interaction) {
         unlockAudio();
         const existing = this.active.get(pointerId);
-        if (existing && existing.holeId === interaction.id && this.currentVoice && !this.currentVoice.released) return;
         if (existing) this.stopHole(pointerId, true);
         const displayNumber = hulusiDisplayNumberForHoleId(interaction.id);
         this.active.set(pointerId, { holeId: interaction.id, displayNumber });
@@ -5309,17 +5297,6 @@ AFRAME.registerComponent('touch-handler', {
 // toggleAudio 函数 - 增加了音频加载失败后的重试机制
 function toggleAudio() {
     const playBtn = document.getElementById('play-btn');
-    if (currentAudioManager && currentAudioManager.config && currentAudioManager.config.interactiveHulusi) {
-        unlockAudio();
-        currentAudioManager.isPlaying = false;
-        if (playBtn) {
-            playBtn.innerHTML = '<span class="emoji">🎵</span>';
-            playBtn.classList.remove('playing');
-        }
-        updateDockButtons();
-        showNotification(hulusiPlayMode === 'real' ? '按住葫芦丝按当前指法发声' : '点击音孔进行演示发声');
-        return;
-    }
     if (currentAudioManager && currentAudioManager.config.model && currentAudioManager.config.model.startsWith('runtime:')) {
         if (currentAudioManager.config.model === 'runtime:drum-machine') {
             const modelEl = document.getElementById(`model${currentAudioManager.markerId.replace('marker', '')}`);
