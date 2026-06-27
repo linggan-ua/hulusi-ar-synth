@@ -2872,13 +2872,13 @@ function saveHulusiCalibration(calibration) {
 }
 
 const HULUSI_HOLES = [
-    { id: 0, display: 1, label: '中音4', note: 'F5', midi: 77, xRatio: 0.28, yOffset: 0.00 },
-    { id: 1, display: 2, label: '中音3', note: 'E5', midi: 76, xRatio: 0.41, yOffset: 0.00 },
-    { id: 2, display: 3, label: '中音2', note: 'D5', midi: 74, xRatio: 0.53, yOffset: 0.00 },
-    { id: 3, display: 4, label: '中音1', note: 'C5', midi: 72, xRatio: 0.59, yOffset: 0.00 },
-    { id: 4, display: 5, label: '低音7', note: 'B4', midi: 71, xRatio: 0.70, yOffset: 0.00 },
-    { id: 5, display: 6, label: '低音6', note: 'A4', midi: 69, xRatio: 0.82, yOffset: 0.00 },
-    { id: 6, display: 7, label: '低音5', note: 'G4', midi: 67, xRatio: 0.94, yOffset: 0.00 }
+    { id: 0, display: 1, label: '中音4', note: 'F5', midi: 77, nominalMidi: 81, acousticPosition: 0.445, ventStrength: 1.00, xRatio: 0.28, yOffset: 0.00 },
+    { id: 1, display: 2, label: '中音3', note: 'E5', midi: 76, nominalMidi: 79, acousticPosition: 0.500, ventStrength: 1.00, xRatio: 0.41, yOffset: 0.00 },
+    { id: 2, display: 3, label: '中音2', note: 'D5', midi: 74, nominalMidi: 76, acousticPosition: 0.595, ventStrength: 1.00, xRatio: 0.53, yOffset: 0.00 },
+    { id: 3, display: 4, label: '中音1', note: 'C5', midi: 72, nominalMidi: 74, acousticPosition: 0.667, ventStrength: 1.00, xRatio: 0.59, yOffset: 0.00 },
+    { id: 4, display: 5, label: '低音7', note: 'B4', midi: 71, nominalMidi: 72, acousticPosition: 0.749, ventStrength: 1.00, xRatio: 0.70, yOffset: 0.00 },
+    { id: 5, display: 6, label: '低音6', note: 'A4', midi: 69, nominalMidi: 71, acousticPosition: 0.794, ventStrength: 1.00, xRatio: 0.82, yOffset: 0.00 },
+    { id: 6, display: 7, label: '低音5', note: 'G4', midi: 67, nominalMidi: 69, acousticPosition: 0.891, ventStrength: 1.00, xRatio: 0.94, yOffset: 0.00 }
 ];
 const HULUSI_HOLE_MESH_NAME_HINT = '001001';
 const HULUSI_HIT_MESH_DEBUG = true;
@@ -2890,6 +2890,14 @@ const HULUSI_HOLE_HIT_HEIGHT_SCALE = 1.75;
 const HULUSI_HOLE_NUMBER_LABELS = true;
 const HULUSI_CALIBRATION_STORAGE_KEY = 'hulusiHoleCalibration.v1';
 const HULUSI_HOLE_COUNT = HULUSI_HOLES.length;
+const HULUSI_ACOUSTIC_CLOSED_MIDI = 67;
+const HULUSI_ACOUSTIC_FULL_LENGTH_RATIO = 1.0;
+const HULUSI_ACOUSTIC_MIN_LENGTH_RATIO = 0.43;
+const HULUSI_OPENING_VALUES = {
+    open: 1,
+    half: 0.46,
+    closed: 0
+};
 const HULUSI_DEFAULT_CALIBRATION = {
     0: { dx: 28.31, dy: 0, dz: -1.51, scale: 1 },
     1: { dx: 26.59, dy: 0, dz: -1.51, scale: 1 },
@@ -3010,10 +3018,8 @@ function refreshHulusiRealVoiceIfActive() {
     }
 }
 
-function hulusiStateValue(state) {
-    if (state === 'closed') return 1;
-    if (state === 'half') return 0.5;
-    return 0;
+function hulusiOpeningValue(state) {
+    return HULUSI_OPENING_VALUES[state] ?? HULUSI_OPENING_VALUES.open;
 }
 
 function hulusiRealFingeringKey(states = hulusiRealFingeringStates, halfAsClosed = false) {
@@ -3024,38 +3030,88 @@ function hulusiRealFingeringKey(states = hulusiRealFingeringStates, halfAsClosed
     }).join('');
 }
 
-function getHulusiRealFingeringNote(states = hulusiRealFingeringStates) {
+function getHulusiAcousticFingering(states = hulusiRealFingeringStates) {
     const key = hulusiRealFingeringKey(states, false);
     const closedKey = hulusiRealFingeringKey(states, true);
     const exact = HULUSI_REAL_FINGERINGS.find((item) => item.key === key) ||
         HULUSI_REAL_FINGERINGS.find((item) => item.key === closedKey);
-    const values = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => hulusiStateValue(states[i + 1]));
-    const halfCount = values.filter((value) => value === 0.5).length;
-    let note = exact;
+    const baseFreq = midiToFrequencyPlain(HULUSI_ACOUSTIC_CLOSED_MIDI);
+    const openings = HULUSI_HOLES.map((hole) => ({
+        hole,
+        state: states[hole.display] || 'open',
+        opening: hulusiOpeningValue(states[hole.display] || 'open')
+    }));
+    const firstVent = openings.find((item) => item.opening > 0.08);
+    const firstVentIndex = firstVent ? openings.indexOf(firstVent) : HULUSI_HOLE_COUNT;
+    const firstPosition = firstVent ? firstVent.hole.acousticPosition : HULUSI_ACOUSTIC_FULL_LENGTH_RATIO;
+    const firstStrength = firstVent ? firstVent.hole.ventStrength * firstVent.opening : 0;
+    const halfCount = openings.filter((item) => item.state === 'half').length;
+    const openCount = openings.filter((item) => item.state === 'open').length;
+    const closedDownstream = openings
+        .slice(Math.min(firstVentIndex + 1, openings.length))
+        .filter((item) => item.state === 'closed').length;
+    const halfDownstream = openings
+        .slice(Math.min(firstVentIndex + 1, openings.length))
+        .filter((item) => item.state === 'half').length;
+    const upstreamLeak = openings
+        .slice(0, Math.max(0, firstVentIndex))
+        .reduce((sum, item) => sum + item.opening * item.hole.ventStrength, 0);
+    const downstreamVent = openings
+        .slice(Math.min(firstVentIndex + 1, openings.length))
+        .reduce((sum, item) => sum + item.opening * item.hole.ventStrength, 0);
+    const isAllClosed = !firstVent;
+    const leakExtension = firstVent ? (1 - firstStrength) * 0.12 + halfDownstream * 0.010 : 0;
+    const crossExtension = closedDownstream * 0.012 + upstreamLeak * 0.034;
+    const effectiveLengthRatio = clampHulusiValue(
+        firstPosition + leakExtension + crossExtension,
+        HULUSI_ACOUSTIC_MIN_LENGTH_RATIO,
+        HULUSI_ACOUSTIC_FULL_LENGTH_RATIO
+    );
+    const frequency = baseFreq / effectiveLengthRatio;
+    const midi = 69 + 12 * Math.log2(frequency / 440);
+    const nearestMidi = Math.round(midi);
+    const cents = Math.round((midi - nearestMidi) * 100);
+    const standardMidi = exact ? exact.midi : null;
+    const standardCents = exact ? Math.round((midi - standardMidi) * 100) : cents;
+    const standardLike = Boolean(exact) && Math.abs(standardCents) <= 40 && halfCount === 0;
+    const instability = clampHulusiValue(
+        halfCount * 0.18 + closedDownstream * 0.045 + upstreamLeak * 0.08 + (!exact ? 0.16 : 0),
+        0,
+        0.75
+    );
+    const damping = clampHulusiValue(
+        halfCount * 0.16 + closedDownstream * 0.065 + upstreamLeak * 0.11 + (isAllClosed ? 0 : (1 - firstStrength) * 0.14),
+        0,
+        0.8
+    );
+    const breathiness = clampHulusiValue(0.10 + halfCount * 0.13 + upstreamLeak * 0.06 + (!exact ? 0.08 : 0), 0.08, 0.52);
+    const label = standardLike ? exact.label : '声学估算';
+    const note = standardLike ? exact.note : noteNameForMidi(nearestMidi);
+    const displayCents = standardLike ? standardCents : cents;
 
-    if (!note) {
-        let best = null;
-        for (const candidate of HULUSI_REAL_FINGERINGS) {
-            const candidateValues = candidate.key.split('').map((char) => char === '1' ? 1 : 0);
-            const score = candidateValues.reduce((sum, value, index) => sum + Math.abs(value - values[index]), 0);
-            if (!best || score < best.score) best = { candidate, score };
-        }
-        note = best?.candidate || HULUSI_REAL_FINGERINGS[0];
-    }
-
-    const cents = halfCount ? -Math.min(45, halfCount * 18) : 0;
-    const midi = note.midi + cents / 100;
-    const baseFreq = midiToFrequencyPlain(getHulusiBaseMidi());
-    const freq = midiToFrequencyPlain(midi);
     return {
-        ...note,
+        label,
+        note,
         midi,
-        label: halfCount ? `${note.label} 半孔` : note.label,
         key,
         displayNumber: 0,
-        downstreamClosed: halfCount,
-        isCrossFingering: !exact || halfCount > 0,
-        effectiveLengthRatio: baseFreq / freq
+        firstOpenHole: firstVent ? firstVent.hole.display : 0,
+        effectiveLengthRatio,
+        downstreamClosed: closedDownstream + halfDownstream * 0.5,
+        downstreamVent,
+        upstreamLeak,
+        halfCount,
+        openCount,
+        damping,
+        instability,
+        breathiness,
+        ventStrength: firstStrength,
+        isCrossFingering: !standardLike || halfCount > 0 || closedDownstream > 0 || upstreamLeak > 0,
+        isAcousticEstimate: !standardLike,
+        cents: displayCents,
+        standardCents,
+        exactFingering: exact || null,
+        standardLike
     };
 }
 
@@ -3082,7 +3138,12 @@ function normalizeHulusiFingeringInput(input) {
             ...input,
             effectiveLengthRatio: input.effectiveLengthRatio || baseFreq / freq,
             downstreamClosed: input.downstreamClosed || 0,
-            isCrossFingering: Boolean(input.isCrossFingering)
+            isCrossFingering: Boolean(input.isCrossFingering),
+            damping: input.damping || 0,
+            instability: input.instability || 0,
+            breathiness: input.breathiness || 0.12,
+            ventStrength: input.ventStrength ?? 1,
+            isAcousticEstimate: Boolean(input.isAcousticEstimate)
         };
     }
 
@@ -3100,30 +3161,41 @@ function normalizeHulusiFingeringInput(input) {
 }
 
 function getHulusiAcousticParams(fingering, freq, velocity = 0.82) {
-    const lengthRatio = clampHulusiValue(fingering.effectiveLengthRatio || 1, 0.48, 1.04);
-    const shortness = clampHulusiValue((1.04 - lengthRatio) / 0.56, 0, 1);
+    const lengthRatio = clampHulusiValue(fingering.effectiveLengthRatio || 1, 0.43, 1.04);
+    const shortness = clampHulusiValue((1.04 - lengthRatio) / 0.61, 0, 1);
     const downstream = clampHulusiValue(fingering.downstreamClosed || 0, 0, HULUSI_HOLE_COUNT);
     const cross = fingering.isCrossFingering ? 1 : 0;
-    const damping = cross * 0.22 + downstream * 0.035;
+    const damping = clampHulusiValue((fingering.damping || 0) + cross * 0.08 + downstream * 0.025, 0, 0.9);
+    const instability = clampHulusiValue(fingering.instability || 0, 0, 0.85);
+    const breathiness = clampHulusiValue(fingering.breathiness || 0.12, 0.08, 0.58);
+    const ventStrength = clampHulusiValue(fingering.ventStrength ?? 1, 0, 1);
 
     return {
         lengthRatio,
-        pipeFrequency: Math.max(520, freq * (1.62 + lengthRatio * 0.58) - downstream * 16),
-        pipeQ: clampHulusiValue(3.35 - shortness * 0.45 - damping, 1.45, 3.6),
-        pipeGain: clampHulusiValue(7.0 - shortness * 0.7 - downstream * 0.12, 4.8, 7.4),
-        gourdFrequency: 330 + shortness * 78 - downstream * 4,
-        gourdGain: clampHulusiValue(4.25 - shortness * 0.35 - cross * 0.18, 3.1, 4.4),
-        nasalFrequency: 600 + freq * (0.30 + lengthRatio * 0.19) - downstream * 18,
-        nasalQ: clampHulusiValue(2.95 - shortness * 0.4 - damping * 0.8, 1.55, 3.1),
-        airLowpassFrequency: clampHulusiValue(2920 + shortness * 820 - downstream * 110 - cross * 220, 2100, 4100),
-        breathPeak: (0.052 + shortness * 0.012 + downstream * 0.004) * velocity,
-        breathSustain: (0.018 + shortness * 0.009 + downstream * 0.003) * velocity,
-        reedAttack: (0.60 - shortness * 0.04 - cross * 0.025) * velocity,
-        reedSustain: (0.41 - shortness * 0.025 - downstream * 0.006) * velocity,
-        octaveAttack: (0.085 + lengthRatio * 0.030 - cross * 0.010) * velocity,
-        octaveSustain: (0.040 + lengthRatio * 0.018 - cross * 0.006) * velocity,
-        droneSustain: (0.014 + lengthRatio * 0.006) * velocity,
-        chiffFrequency: 2300 + shortness * 760 - downstream * 55
+        shortness,
+        damping,
+        instability,
+        breathiness,
+        pipeFrequency: Math.max(520, freq * (1.78 + lengthRatio * 0.42) - downstream * 9),
+        pipeQ: clampHulusiValue(3.2 - shortness * 0.30 - damping * 1.05 - instability * 0.45, 1.2, 3.35),
+        pipeGain: clampHulusiValue(7.0 - shortness * 0.35 - damping * 1.2, 4.5, 7.15),
+        gourdFrequency: 350 + shortness * 34 - downstream * 3 + instability * 18,
+        gourdGain: clampHulusiValue(4.0 - damping * 0.52 - instability * 0.25, 3.0, 4.25),
+        nasalFrequency: 720 + freq * 0.40 - downstream * 8 - instability * 35,
+        nasalQ: clampHulusiValue(2.6 - damping * 0.75 - instability * 0.45, 1.35, 2.8),
+        airLowpassFrequency: clampHulusiValue(3550 + shortness * 250 - damping * 820 - instability * 420, 2100, 3900),
+        breathPeak: (0.060 + breathiness * 0.030 + instability * 0.010) * velocity,
+        breathSustain: (0.020 + breathiness * 0.026 + instability * 0.014) * velocity,
+        reedAttack: (0.62 - damping * 0.10 - instability * 0.04) * velocity,
+        reedSustain: (0.42 - damping * 0.15 - instability * 0.06) * velocity,
+        octaveAttack: (0.105 - damping * 0.030 + shortness * 0.012) * velocity,
+        octaveSustain: (0.055 - damping * 0.022 + shortness * 0.006) * velocity,
+        droneSustain: (0.018 * (0.78 + lengthRatio * 0.22) * (0.88 + ventStrength * 0.12)) * velocity,
+        chiffFrequency: 2700 + shortness * 180 - damping * 260 - instability * 160,
+        outputPeak: clampHulusiValue(0.72 - damping * 0.16 - instability * 0.09, 0.48, 0.72),
+        outputSustain: clampHulusiValue(0.58 - damping * 0.18 - instability * 0.10, 0.36, 0.58),
+        vibratoDepth: clampHulusiValue(5.8 + instability * 2.6, 4.8, 7.8),
+        pressureDepth: clampHulusiValue(0.035 + instability * 0.026 + breathiness * 0.010, 0.025, 0.075) * velocity
     };
 }
 
@@ -3136,6 +3208,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     const fingering = normalizeHulusiFingeringInput(fingeringInput);
     const midi = fingering.midi;
     const freq = midiToFrequencyPlain(midi);
+    const acoustic = getHulusiAcousticParams(fingering, freq, velocity);
     const oscillator = ctx.createOscillator();
     const subOscillator = ctx.createOscillator();
     const droneOscillator = ctx.createOscillator();
@@ -3174,33 +3247,33 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
 
     vibrato.frequency.value = 5.1;
     vibratoGain.gain.setValueAtTime(0.8, now);
-    vibratoGain.gain.linearRampToValueAtTime(5.8, now + 0.32);
+    vibratoGain.gain.linearRampToValueAtTime(acoustic.vibratoDepth, now + 0.32);
     vibrato.connect(vibratoGain);
     vibratoGain.connect(oscillator.detune);
     vibratoGain.connect(subOscillator.detune);
 
     pressure.frequency.value = 2.25;
-    pressureGain.gain.value = 0.035 * velocity;
+    pressureGain.gain.value = acoustic.pressureDepth;
     pressure.connect(pressureGain);
     pressureGain.connect(reedGain.gain);
 
     reedGain.gain.setValueAtTime(0.0001, now);
-    reedGain.gain.linearRampToValueAtTime(0.62 * velocity, now + 0.045);
-    reedGain.gain.setTargetAtTime(0.42 * velocity, now + 0.09, 0.18);
+    reedGain.gain.linearRampToValueAtTime(acoustic.reedAttack, now + 0.045);
+    reedGain.gain.setTargetAtTime(acoustic.reedSustain, now + 0.09, 0.18);
     subGain.gain.setValueAtTime(0.0001, now);
-    subGain.gain.linearRampToValueAtTime(0.105 * velocity, now + 0.075);
-    subGain.gain.setTargetAtTime(0.055 * velocity, now + 0.18, 0.22);
+    subGain.gain.linearRampToValueAtTime(acoustic.octaveAttack, now + 0.075);
+    subGain.gain.setTargetAtTime(acoustic.octaveSustain, now + 0.18, 0.22);
     droneGain.gain.setValueAtTime(0.0001, now);
     droneGain.gain.linearRampToValueAtTime(0.030 * velocity, now + 0.18);
-    droneGain.gain.setTargetAtTime(0.018 * velocity, now + 0.35, 0.5);
+    droneGain.gain.setTargetAtTime(acoustic.droneSustain, now + 0.35, 0.5);
     reedShaper.curve = createHulusiReedCurve(1.9);
     reedShaper.oversample = '2x';
 
     breathSource.buffer = makeNoiseBuffer(ctx, 2.4);
     chiffSource.buffer = makeNoiseBuffer(ctx, 0.18);
     breathGain.gain.setValueAtTime(0.0001, now);
-    breathGain.gain.linearRampToValueAtTime(0.060 * velocity, now + 0.028);
-    breathGain.gain.setTargetAtTime(0.020 * velocity, now + 0.16, 0.45);
+    breathGain.gain.linearRampToValueAtTime(acoustic.breathPeak, now + 0.028);
+    breathGain.gain.setTargetAtTime(acoustic.breathSustain, now + 0.16, 0.45);
     breathHighpass.type = 'highpass';
     breathHighpass.frequency.value = 780;
     breathBandpass.type = 'bandpass';
@@ -3210,28 +3283,28 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     chiffGain.gain.linearRampToValueAtTime(0.11 * velocity, now + 0.012);
     chiffGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
     chiffBandpass.type = 'bandpass';
-    chiffBandpass.frequency.value = 2700;
+    chiffBandpass.frequency.value = acoustic.chiffFrequency;
     chiffBandpass.Q.value = 1.8;
 
     gourdResonator.type = 'peaking';
-    gourdResonator.frequency.value = 360;
+    gourdResonator.frequency.value = acoustic.gourdFrequency;
     gourdResonator.Q.value = 0.82;
-    gourdResonator.gain.value = 4.0;
+    gourdResonator.gain.value = acoustic.gourdGain;
     pipeResonator.type = 'peaking';
-    pipeResonator.frequency.value = Math.max(540, freq * 2.15);
-    pipeResonator.Q.value = 3.2;
-    pipeResonator.gain.value = 7.0;
+    pipeResonator.frequency.value = acoustic.pipeFrequency;
+    pipeResonator.Q.value = acoustic.pipeQ;
+    pipeResonator.gain.value = acoustic.pipeGain;
 
     nasalFilter.type = 'bandpass';
-    nasalFilter.frequency.setValueAtTime(720 + freq * 0.44, now);
-    nasalFilter.Q.value = 2.6;
+    nasalFilter.frequency.setValueAtTime(acoustic.nasalFrequency, now);
+    nasalFilter.Q.value = acoustic.nasalQ;
     airLowpass.type = 'lowpass';
-    airLowpass.frequency.value = 3550;
+    airLowpass.frequency.value = acoustic.airLowpassFrequency;
     airLowpass.Q.value = 0.72;
 
     output.gain.setValueAtTime(0.0001, now);
-    output.gain.linearRampToValueAtTime(0.72, now + 0.035);
-    output.gain.setTargetAtTime(0.58, now + 0.12, 0.28);
+    output.gain.linearRampToValueAtTime(acoustic.outputPeak, now + 0.035);
+    output.gain.setTargetAtTime(acoustic.outputSustain, now + 0.12, 0.28);
 
     oscillator.connect(reedGain);
     subOscillator.connect(subGain);
@@ -3303,10 +3376,25 @@ function setHulusiVoicePitch(voice, fingeringInput) {
     const fingering = normalizeHulusiFingeringInput(fingeringInput);
     const midi = fingering.midi;
     const freq = midiToFrequencyPlain(midi);
+    const acoustic = getHulusiAcousticParams(fingering, freq, voice.velocity || 0.82);
     scheduleAudioParam(voice.oscillator.frequency, freq, now, 0.035);
     scheduleAudioParam(voice.subOscillator?.frequency, freq * 2.005, now, 0.04);
-    scheduleAudioParam(voice.pipeResonator?.frequency, Math.max(540, freq * 2.15), now, 0.05);
-    scheduleAudioParam(voice.nasalFilter?.frequency, 720 + freq * 0.44, now, 0.05);
+    scheduleAudioParam(voice.pipeResonator?.frequency, acoustic.pipeFrequency, now, 0.05);
+    scheduleAudioParam(voice.pipeResonator?.Q, acoustic.pipeQ, now, 0.06);
+    scheduleAudioParam(voice.pipeResonator?.gain, acoustic.pipeGain, now, 0.06);
+    scheduleAudioParam(voice.gourdResonator?.frequency, acoustic.gourdFrequency, now, 0.08);
+    scheduleAudioParam(voice.gourdResonator?.gain, acoustic.gourdGain, now, 0.08);
+    scheduleAudioParam(voice.nasalFilter?.frequency, acoustic.nasalFrequency, now, 0.05);
+    scheduleAudioParam(voice.nasalFilter?.Q, acoustic.nasalQ, now, 0.06);
+    scheduleAudioParam(voice.airLowpass?.frequency, acoustic.airLowpassFrequency, now, 0.08);
+    scheduleAudioParam(voice.reedGain?.gain, acoustic.reedSustain, now, 0.10);
+    scheduleAudioParam(voice.subGain?.gain, acoustic.octaveSustain, now, 0.10);
+    scheduleAudioParam(voice.droneGain?.gain, acoustic.droneSustain, now, 0.16);
+    scheduleAudioParam(voice.breathGain?.gain, acoustic.breathSustain, now, 0.10);
+    scheduleAudioParam(voice.chiffBandpass?.frequency, acoustic.chiffFrequency, now, 0.05);
+    scheduleAudioParam(voice.vibratoGain?.gain, acoustic.vibratoDepth, now, 0.18);
+    scheduleAudioParam(voice.pressureGain?.gain, acoustic.pressureDepth, now, 0.12);
+    scheduleAudioParam(voice.gain?.gain, acoustic.outputSustain, now, 0.12);
     voice.fingering = fingering;
 }
 
@@ -3723,7 +3811,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     startRealFingering: function (pointerId) {
         unlockAudio();
         this.realPointerId = pointerId;
-        const fingering = getHulusiRealFingeringNote(hulusiRealFingeringStates);
+        const fingering = getHulusiAcousticFingering(hulusiRealFingeringStates);
         if (!this.currentVoice) {
             this.currentVoice = createHulusiVoice(fingering, 0.88);
         } else {
@@ -3734,7 +3822,10 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             const state = hulusiRealFingeringStates[i + 1];
             return state === 'closed' ? `${i + 1}` : state === 'half' ? `${i + 1}/` : '○';
         }).join(' ');
-        showNotification(`真实指法 ${fingering.label} (${fingering.note})  ${keyText}`);
+        const pitchText = fingering.isAcousticEstimate
+            ? `声学估算 ${fingering.note} ${formatHulusiCents(fingering.cents)}`
+            : `${fingering.label} (${fingering.note}) ${formatHulusiCents(fingering.standardCents)}`;
+        showNotification(`真实指法 ${pitchText}  ${keyText}`);
     },
 
     stopRealFingering: function (pointerId = null, force = false) {
@@ -5573,6 +5664,12 @@ function hulusiFingeringStateSymbol(state) {
     return '○';
 }
 
+function formatHulusiCents(cents = 0) {
+    const rounded = Math.round(cents || 0);
+    if (Math.abs(rounded) < 1) return '0c';
+    return `${rounded > 0 ? '+' : ''}${rounded}c`;
+}
+
 function updateHulusiFingeringPanel() {
     const panel = document.getElementById('hulusi-fingering-panel');
     if (!panel) return;
@@ -5590,12 +5687,15 @@ function updateHulusiFingeringPanel() {
     });
     const summary = document.getElementById('hulusi-fingering-summary');
     if (summary) {
-        const note = getHulusiRealFingeringNote(hulusiRealFingeringStates);
+        const note = getHulusiAcousticFingering(hulusiRealFingeringStates);
         const stateText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
             const display = i + 1;
             return `${display}${hulusiFingeringStateSymbol(hulusiRealFingeringStates[display])}`;
         }).join('  ');
-        summary.textContent = `${hulusiPlayMode === 'real' ? '真实指法模式' : '简单演示模式'}  |  当前指法 ${note.label} (${note.note})  |  ${stateText}`;
+        const acousticText = note.isAcousticEstimate
+            ? `声学估算 ${note.note} ${formatHulusiCents(note.cents)}`
+            : `${note.label} (${note.note}) ${formatHulusiCents(note.standardCents)}`;
+        summary.textContent = `${hulusiPlayMode === 'real' ? '真实指法模式' : '简单演示模式'}  |  当前 ${acousticText}  |  ${stateText}`;
     }
 }
 
