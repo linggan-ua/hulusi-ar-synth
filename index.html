@@ -2797,8 +2797,9 @@ function getHulusiFingeringNote(closedDisplayHoles) {
         return HULUSI_FINGERING_NOTES[exact[key]];
     }
 
-    const lowestClosed = Math.min(...closed);
-    return HULUSI_FINGERING_NOTES[Math.max(0, Math.min(6, lowestClosed - 1))];
+    const countIndex = Math.max(0, Math.min(HULUSI_FINGERING_NOTES.length - 1, closed.length));
+    const note = HULUSI_FINGERING_NOTES[countIndex];
+    return { ...note, label: `${note.label}*` };
 }
 
 function createHulusiVoice(midi, velocity = 0.82) {
