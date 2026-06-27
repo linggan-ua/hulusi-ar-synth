@@ -1635,6 +1635,13 @@ function getRuntimePointerId(evt) {
     return source.pointerId || touch?.identifier || 1;
 }
 
+function getRuntimePointerFromTouch(touch) {
+    return {
+        x: touch.clientX || 0,
+        y: touch.clientY || 0
+    };
+}
+
 const runtimeControlEventOptions = { capture: true, passive: false };
 const runtimeControlClickOptions = { capture: true };
 const runtimeTouchHitPadding = 34;
@@ -2763,12 +2770,12 @@ const HULUSI_FINGERING_NOTES = [
 ];
 
 function getHulusiFingeringNote(closedDisplayHoles) {
-    let openFromBottom = 0;
+    let selectedFromBottom = 0;
     for (let display = 1; display <= HULUSI_HOLE_COUNT; display++) {
-        if (closedDisplayHoles.has(display)) break;
-        openFromBottom++;
+        if (!closedDisplayHoles.has(display)) break;
+        selectedFromBottom++;
     }
-    return HULUSI_FINGERING_NOTES[Math.min(openFromBottom, HULUSI_FINGERING_NOTES.length - 1)];
+    return HULUSI_FINGERING_NOTES[Math.min(selectedFromBottom, HULUSI_FINGERING_NOTES.length - 1)];
 }
 
 function createHulusiVoice(midi, velocity = 0.82) {
@@ -3230,7 +3237,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             setHulusiVoicePitch(this.currentVoice, fingering.midi);
         }
         this.currentFingering = fingering;
-        showNotification(`葫芦丝 ${fingering.label} (${fingering.note})  指法 ${stateText}`);
+        showNotification(`葫芦丝 ${fingering.label} (${fingering.note})  触摸 ${stateText}`);
     },
 
     releaseFingeringVoiceIfOpen: function () {
@@ -3256,6 +3263,21 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         if (!camera || !this.interactives.length) return null;
         this.el.object3D.updateMatrixWorld(true);
         const { pointer, canvasRect } = setRuntimeRaycasterFromEvent(this.raycaster, this.mouse, this.el.sceneEl, camera, evt);
+        const rayHit = getRuntimeRaycastHit(this.raycaster, this.interactives);
+        if (rayHit) return rayHit;
+        return findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer);
+    },
+
+    raycastAtPointer: function (pointer) {
+        const camera = this.el.sceneEl.camera;
+        if (!camera || !this.interactives.length) return null;
+        const canvasRect = getRuntimeCanvasRect(this.el.sceneEl);
+        this.mouse.x = ((pointer.x - canvasRect.left) / canvasRect.width) * 2 - 1;
+        this.mouse.y = -((pointer.y - canvasRect.top) / canvasRect.height) * 2 + 1;
+        this.el.sceneEl.object3D.updateMatrixWorld(true);
+        this.el.object3D.updateMatrixWorld(true);
+        prepareRuntimeCameraForRaycast(camera);
+        this.raycaster.setFromCamera(this.mouse, camera);
         const rayHit = getRuntimeRaycastHit(this.raycaster, this.interactives);
         if (rayHit) return rayHit;
         return findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer);
@@ -3298,6 +3320,23 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     handlePointerDown: function (evt) {
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
+        const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
+        if (source.changedTouches && source.changedTouches.length) {
+            let handled = false;
+            Array.from(source.changedTouches).forEach((touch) => {
+                const hit = this.raycastAtPointer(getRuntimePointerFromTouch(touch));
+                if (!hit || hit.interaction.kind !== 'hulusi-hole') return;
+                handled = true;
+                this.startHole(`touch-${touch.identifier}`, hit.interaction);
+            });
+            if (handled) {
+                evt.stopPropagation();
+                if (evt.preventDefault) evt.preventDefault();
+                runtimeControlPointerActive = true;
+                this.pointerHandledUntil = Date.now() + 650;
+            }
+            return;
+        }
         if (Date.now() < this.pointerHandledUntil && (evt.type === 'touchstart' || evt.type === 'mousedown')) return;
         const hit = this.raycastInteractives(evt);
         if (!hit || hit.interaction.kind !== 'hulusi-hole') return;
@@ -3310,6 +3349,21 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     handlePointerMove: function (evt) {
         if (!this.el.getAttribute('visible') || modelGestureMode !== 'interact') return;
+        const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
+        if (source.changedTouches && source.changedTouches.length) {
+            let handled = false;
+            Array.from(source.changedTouches).forEach((touch) => {
+                const pointerId = `touch-${touch.identifier}`;
+                if (!this.active.has(pointerId)) return;
+                const hit = this.raycastAtPointer(getRuntimePointerFromTouch(touch));
+                if (hit && hit.interaction.kind === 'hulusi-hole') {
+                    handled = true;
+                    this.slideHole(pointerId, hit.interaction);
+                }
+            });
+            if (handled && evt.preventDefault) evt.preventDefault();
+            return;
+        }
         const pointerId = getRuntimePointerId(evt);
         if (!this.active.has(pointerId)) return;
         const hit = this.raycastInteractives(evt);
@@ -3320,6 +3374,13 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     },
 
     handlePointerUp: function (evt) {
+        const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
+        if (source.changedTouches && source.changedTouches.length) {
+            Array.from(source.changedTouches).forEach((touch) => this.stopHole(`touch-${touch.identifier}`));
+            if (!this.active.size) runtimeControlPointerActive = false;
+            if (evt.preventDefault) evt.preventDefault();
+            return;
+        }
         const pointerId = getRuntimePointerId(evt);
         this.stopHole(pointerId);
         if (!this.active.size) runtimeControlPointerActive = false;
