@@ -1391,6 +1391,7 @@ let isAudioReloading = false; // 新增：防止重复触发音频重载
 let permissionCheckTimeout = null; // 新增：权限检测超时
 const debugParams = new URLSearchParams(window.location.search);
 const HULUSI_DEBUG_MODE = debugParams.get('debug') === 'hulusi' || debugParams.has('hulusiDebug');
+const ARJS_SCENE_CONFIG = 'sourceType: webcam; debugUIEnabled: false;';
 
 // ====================================================================
 // AR 合成器/鼓机平台配置
@@ -1515,6 +1516,13 @@ function setupARSceneErrorHandling() {
         console.log('AR rendering started');
         clearTimeout(permissionCheckTimeout);
     });
+}
+
+function ensureARSceneTracking() {
+    const arScene = document.getElementById('ar-scene');
+    if (arScene && !arScene.hasAttribute('arjs')) {
+        arScene.setAttribute('arjs', ARJS_SCENE_CONFIG);
+    }
 }
 
 // 处理AR错误
@@ -5899,7 +5907,21 @@ function updateDockButtons() {
 function createStartOverlay() {
     startOverlay = document.getElementById('start-overlay');
     const device = getDeviceInfo();
-    const permissionGuideHTML = device.isIOS ? `
+    const title = startOverlay && startOverlay.querySelector('.start-title');
+    const subtitle = startOverlay && startOverlay.querySelector('.start-subtitle');
+    const startButton = startOverlay && startOverlay.querySelector('.start-button');
+    if (HULUSI_DEBUG_MODE) {
+        if (title) title.textContent = '葫芦丝调试模式';
+        if (subtitle) subtitle.textContent = '无需扫码，点击后加载葫芦丝模型';
+        if (startButton) startButton.textContent = '启动葫芦丝调试';
+    }
+    const permissionGuideHTML = HULUSI_DEBUG_MODE ? `
+        <div class="permission-guide">
+            <div class="guide-title">葫芦丝无扫码调试</div>
+            <div class="guide-text">点击启动后会显示模型、音孔碰撞体和指法面板。</div>
+            <div class="guide-text">调试模式不会主动申请摄像头权限，可直接用鼠标或触摸测试演奏。</div>
+        </div>
+    ` : device.isIOS ? `
         <div class="permission-guide">
             <div class="guide-title">星海音乐学院师生团队温馨提示：</div>
             <div class="guide-text">请点击"允许/Allow"授权以使用AR功能</div>
@@ -5932,6 +5954,11 @@ function createStartOverlay() {
 async function startAR() {
     if (isARStarted) return;
     console.log('启动AR体验');
+
+    if (HULUSI_DEBUG_MODE) {
+        setupHulusiDebugMode();
+        return;
+    }
     
     // 检查权限状态
     const permissionStatus = await checkCameraPermission();
@@ -5958,6 +5985,7 @@ async function startAR() {
     // 权限正常，启动AR
     isARStarted = true;
     startOverlay.classList.add('hidden');
+    ensureARSceneTracking();
     document.getElementById('ar-scene').classList.add('active');
     document.getElementById('dock-container').classList.add('active');
 
@@ -6168,7 +6196,6 @@ function backToStart() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('页面加载完成，准备启动AR。');
     createStartOverlay();
-    setupHulusiDebugMode();
     
     // 设置AR场景错误处理
     setupARSceneErrorHandling();
@@ -6347,8 +6374,7 @@ document.addEventListener('DOMContentLoaded', function() {
     id="ar-scene" 
     embedded
     vr-mode-ui="enabled: false"
-    renderer="logarithmicDepthBuffer: true;"
-    arjs="sourceType: webcam; debugUIEnabled: false;">
+    renderer="logarithmicDepthBuffer: true;">
 
 <!-- ==================================================================== -->
    <!-- 所有23个Marker的完整结构 (已移除旧的 <a-torus> 加载动画) -->
