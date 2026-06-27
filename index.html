@@ -1568,9 +1568,6 @@ const HULUSI_HARMONICS = {
     real: [0, 1.0, 0.35, 0.52, 0.12, 0.24, 0.06, 0.10, 0.03, 0.05, 0.02, 0.03, 0.01],
     imag: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 };
-const HULUSI_ENABLE_DRONE_PIPE = false;
-const HULUSI_ENABLE_SHARED_FX = false;
-const HULUSI_MUTED_GAIN = 0.0001;
 
 const FADERS = [
     { id: "A", label: "A", value: 0.05, color: 0x3aa6ff },
@@ -3124,7 +3121,6 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     const fingering = normalizeHulusiFingeringInput(fingeringInput);
     const midi = fingering.midi;
     const freq = midiToFrequencyPlain(midi);
-    const acoustic = getHulusiAcousticParams(fingering, freq, velocity);
     const oscillator = ctx.createOscillator();
     const subOscillator = ctx.createOscillator();
     const droneOscillator = ctx.createOscillator();
@@ -3174,26 +3170,22 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     pressureGain.connect(reedGain.gain);
 
     reedGain.gain.setValueAtTime(0.0001, now);
-    reedGain.gain.linearRampToValueAtTime(acoustic.reedAttack, now + 0.045);
-    reedGain.gain.setTargetAtTime(acoustic.reedSustain, now + 0.09, 0.18);
+    reedGain.gain.linearRampToValueAtTime(0.62 * velocity, now + 0.045);
+    reedGain.gain.setTargetAtTime(0.42 * velocity, now + 0.09, 0.18);
     subGain.gain.setValueAtTime(0.0001, now);
-    subGain.gain.linearRampToValueAtTime(acoustic.octaveAttack, now + 0.075);
-    subGain.gain.setTargetAtTime(acoustic.octaveSustain, now + 0.18, 0.22);
-    droneGain.gain.setValueAtTime(HULUSI_MUTED_GAIN, now);
-    if (HULUSI_ENABLE_DRONE_PIPE) {
-        droneGain.gain.linearRampToValueAtTime(0.030 * velocity, now + 0.18);
-        droneGain.gain.setTargetAtTime(acoustic.droneSustain, now + 0.35, 0.5);
-    } else {
-        droneGain.gain.setTargetAtTime(HULUSI_MUTED_GAIN, now + 0.02, 0.08);
-    }
+    subGain.gain.linearRampToValueAtTime(0.105 * velocity, now + 0.075);
+    subGain.gain.setTargetAtTime(0.055 * velocity, now + 0.18, 0.22);
+    droneGain.gain.setValueAtTime(0.0001, now);
+    droneGain.gain.linearRampToValueAtTime(0.030 * velocity, now + 0.18);
+    droneGain.gain.setTargetAtTime(0.018 * velocity, now + 0.35, 0.5);
     reedShaper.curve = createHulusiReedCurve(1.9);
     reedShaper.oversample = '2x';
 
     breathSource.buffer = makeNoiseBuffer(ctx, 2.4);
     chiffSource.buffer = makeNoiseBuffer(ctx, 0.18);
     breathGain.gain.setValueAtTime(0.0001, now);
-    breathGain.gain.linearRampToValueAtTime(acoustic.breathPeak, now + 0.028);
-    breathGain.gain.setTargetAtTime(acoustic.breathSustain, now + 0.16, 0.45);
+    breathGain.gain.linearRampToValueAtTime(0.060 * velocity, now + 0.028);
+    breathGain.gain.setTargetAtTime(0.020 * velocity, now + 0.16, 0.45);
     breathHighpass.type = 'highpass';
     breathHighpass.frequency.value = 780;
     breathBandpass.type = 'bandpass';
@@ -3203,23 +3195,23 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     chiffGain.gain.linearRampToValueAtTime(0.11 * velocity, now + 0.012);
     chiffGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
     chiffBandpass.type = 'bandpass';
-    chiffBandpass.frequency.value = acoustic.chiffFrequency;
+    chiffBandpass.frequency.value = 2700;
     chiffBandpass.Q.value = 1.8;
 
     gourdResonator.type = 'peaking';
-    gourdResonator.frequency.value = acoustic.gourdFrequency;
+    gourdResonator.frequency.value = 360;
     gourdResonator.Q.value = 0.82;
-    gourdResonator.gain.value = acoustic.gourdGain;
+    gourdResonator.gain.value = 4.0;
     pipeResonator.type = 'peaking';
-    pipeResonator.frequency.value = acoustic.pipeFrequency;
-    pipeResonator.Q.value = acoustic.pipeQ;
-    pipeResonator.gain.value = acoustic.pipeGain;
+    pipeResonator.frequency.value = Math.max(540, freq * 2.15);
+    pipeResonator.Q.value = 3.2;
+    pipeResonator.gain.value = 7.0;
 
     nasalFilter.type = 'bandpass';
-    nasalFilter.frequency.setValueAtTime(acoustic.nasalFrequency, now);
-    nasalFilter.Q.value = acoustic.nasalQ;
+    nasalFilter.frequency.setValueAtTime(720 + freq * 0.44, now);
+    nasalFilter.Q.value = 2.6;
     airLowpass.type = 'lowpass';
-    airLowpass.frequency.value = acoustic.airLowpassFrequency;
+    airLowpass.frequency.value = 3550;
     airLowpass.Q.value = 0.72;
 
     output.gain.setValueAtTime(0.0001, now);
@@ -3245,7 +3237,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     nasalFilter.connect(airLowpass);
     airLowpass.connect(output);
     output.connect(masterGain);
-    if (fxSend && HULUSI_ENABLE_SHARED_FX) output.connect(fxSend);
+    if (fxSend) output.connect(fxSend);
 
     oscillator.start(now);
     subOscillator.start(now);
@@ -3296,21 +3288,10 @@ function setHulusiVoicePitch(voice, fingeringInput) {
     const fingering = normalizeHulusiFingeringInput(fingeringInput);
     const midi = fingering.midi;
     const freq = midiToFrequencyPlain(midi);
-    const acoustic = getHulusiAcousticParams(fingering, freq, voice.velocity || 0.82);
     scheduleAudioParam(voice.oscillator.frequency, freq, now, 0.035);
     scheduleAudioParam(voice.subOscillator?.frequency, freq * 2.005, now, 0.04);
-    scheduleAudioParam(voice.pipeResonator?.frequency, acoustic.pipeFrequency, now, 0.05);
-    scheduleAudioParam(voice.pipeResonator?.Q, acoustic.pipeQ, now, 0.05);
-    scheduleAudioParam(voice.pipeResonator?.gain, acoustic.pipeGain, now, 0.05);
-    scheduleAudioParam(voice.gourdResonator?.frequency, acoustic.gourdFrequency, now, 0.06);
-    scheduleAudioParam(voice.gourdResonator?.gain, acoustic.gourdGain, now, 0.06);
-    scheduleAudioParam(voice.nasalFilter?.frequency, acoustic.nasalFrequency, now, 0.05);
-    scheduleAudioParam(voice.nasalFilter?.Q, acoustic.nasalQ, now, 0.05);
-    scheduleAudioParam(voice.airLowpass?.frequency, acoustic.airLowpassFrequency, now, 0.06);
-    scheduleAudioParam(voice.reedGain?.gain, acoustic.reedSustain, now, 0.075);
-    scheduleAudioParam(voice.subGain?.gain, acoustic.octaveSustain, now, 0.075);
-    scheduleAudioParam(voice.droneGain?.gain, HULUSI_ENABLE_DRONE_PIPE ? acoustic.droneSustain : HULUSI_MUTED_GAIN, now, 0.12);
-    scheduleAudioParam(voice.breathGain?.gain, acoustic.breathSustain, now, 0.08);
+    scheduleAudioParam(voice.pipeResonator?.frequency, Math.max(540, freq * 2.15), now, 0.05);
+    scheduleAudioParam(voice.nasalFilter?.frequency, 720 + freq * 0.44, now, 0.05);
     voice.fingering = fingering;
 }
 
