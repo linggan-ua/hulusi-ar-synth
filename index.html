@@ -823,6 +823,157 @@
         .hulusi-calibration-toggle.active {
             display: block;
         }
+
+        .hulusi-fingering-toggle {
+            position: fixed;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 940;
+            display: none;
+            width: 44px;
+            height: 112px;
+            border: 1px solid rgba(255, 255, 255, 0.36);
+            border-radius: 22px 0 0 22px;
+            background: rgba(18, 22, 28, 0.82);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 800;
+            writing-mode: vertical-rl;
+            letter-spacing: 0;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.24);
+            backdrop-filter: blur(16px) saturate(1.35);
+            -webkit-backdrop-filter: blur(16px) saturate(1.35);
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .hulusi-fingering-toggle.visible {
+            display: block;
+        }
+
+        .hulusi-fingering-panel {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            z-index: 939;
+            width: min(84vw, 310px);
+            max-height: min(82vh, 620px);
+            overflow-y: auto;
+            transform: translate(100%, -50%);
+            transition: transform 0.25s ease;
+            padding: 14px;
+            border-radius: 18px 0 0 18px;
+            background: rgba(12, 16, 20, 0.86);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-right: none;
+            box-shadow: 0 14px 44px rgba(0, 0, 0, 0.32);
+            backdrop-filter: blur(18px) saturate(1.45);
+            -webkit-backdrop-filter: blur(18px) saturate(1.45);
+            pointer-events: auto;
+        }
+
+        .hulusi-fingering-panel.active {
+            transform: translate(0, -50%);
+        }
+
+        .hulusi-fingering-header,
+        .hulusi-fingering-row,
+        .hulusi-fingering-mode,
+        .hulusi-fingering-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hulusi-fingering-header {
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .hulusi-fingering-title {
+            font-size: 15px;
+            font-weight: 850;
+        }
+
+        .hulusi-fingering-mode,
+        .hulusi-fingering-actions {
+            flex-wrap: wrap;
+            margin: 8px 0 10px;
+        }
+
+        .hulusi-fingering-row {
+            justify-content: space-between;
+            margin: 7px 0;
+        }
+
+        .hulusi-fingering-hole-label {
+            width: 46px;
+            font-size: 13px;
+            font-weight: 780;
+        }
+
+        .hulusi-fingering-button {
+            min-width: 44px;
+            height: 34px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.13);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 780;
+            cursor: pointer;
+        }
+
+        .hulusi-fingering-button.active {
+            background: rgba(48, 214, 255, 0.9);
+            color: #071014;
+            border-color: rgba(255, 255, 255, 0.64);
+        }
+
+        .hulusi-fingering-button.closed {
+            background: rgba(255, 99, 83, 0.84);
+        }
+
+        .hulusi-fingering-button.half {
+            background: rgba(248, 204, 88, 0.88);
+            color: #241600;
+        }
+
+        .hulusi-fingering-hole-button {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid rgba(255, 255, 255, 0.26);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 820;
+            cursor: pointer;
+        }
+
+        .hulusi-fingering-hole-button.open {
+            background: rgba(72, 190, 126, 0.78);
+        }
+
+        .hulusi-fingering-hole-button.half {
+            background: rgba(248, 204, 88, 0.88);
+            color: #241600;
+        }
+
+        .hulusi-fingering-hole-button.closed {
+            background: rgba(255, 99, 83, 0.84);
+        }
+
+        .hulusi-fingering-summary {
+            margin-top: 10px;
+            padding: 9px 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.11);
+            font-size: 12px;
+            line-height: 1.55;
+        }
         
         .info-panel {
             position: fixed;
@@ -1204,6 +1355,9 @@
             .hulusi-calibration-button { min-width: 34px; height: 32px; font-size: 12px; }
             .hulusi-calibration-readout { min-width: 100%; font-size: 11px; }
             .hulusi-calibration-toggle { right: 12px; bottom: 96px; }
+            .hulusi-fingering-panel { width: min(92vw, 300px); max-height: 72vh; padding: 12px; }
+            .hulusi-fingering-toggle { width: 40px; height: 100px; right: 8px; }
+            .hulusi-fingering-button { min-width: 40px; height: 32px; font-size: 12px; }
             .info-content { padding: 15px; }
             .markdown-content h1 { font-size: 20px; }
             .markdown-content h2 { font-size: 16px; }
@@ -1646,7 +1800,7 @@ function isRuntimeUiEvent(evt) {
     const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
     const target = source.target || evt.target;
     return Boolean(target && target.closest && target.closest(
-        '#dock-container, #hulusi-calibration-panel, #hulusi-calibration-toggle, #info-panel, #start-overlay, #loading-overlay'
+        '#dock-container, #hulusi-calibration-panel, #hulusi-calibration-toggle, #hulusi-fingering-panel, #hulusi-fingering-toggle, #info-panel, #start-overlay, #loading-overlay'
     ));
 }
 
@@ -2735,6 +2889,34 @@ const HULUSI_DEBUG_MODEL_DEFAULT = {
     rotation: { x: 0, y: 0, z: 0 },
     scale: 0.14
 };
+const HULUSI_PLAY_MODE_STORAGE_KEY = 'hulusiPlayMode.v1';
+const HULUSI_REAL_FINGERING_STORAGE_KEY = 'hulusiRealFingering.v1';
+const HULUSI_FINGERING_STATES = ['open', 'half', 'closed'];
+const HULUSI_REAL_DEFAULT_STATES = {
+    1: 'closed',
+    2: 'closed',
+    3: 'closed',
+    4: 'closed',
+    5: 'closed',
+    6: 'closed',
+    7: 'closed'
+};
+const HULUSI_REAL_FINGERINGS = [
+    { key: '1111111', label: '低音5', note: 'G4', midi: 67 },
+    { key: '1111110', label: '低音6', note: 'A4', midi: 69 },
+    { key: '1111100', label: '低音7', note: 'B4', midi: 71 },
+    { key: '1111000', label: '中音1', note: 'C5', midi: 72 },
+    { key: '1110000', label: '中音2', note: 'D5', midi: 74 },
+    { key: '1100000', label: '中音3', note: 'E5', midi: 76 },
+    { key: '1000000', label: '中音5', note: 'G5', midi: 79 },
+    { key: '0000000', label: '中音6', note: 'A5', midi: 81 },
+    { key: '0111111', label: '中音4', note: 'F5', midi: 77 },
+    { key: '1011111', label: '中音4', note: 'F5', midi: 77 },
+    { key: '1101111', label: '中音3', note: 'E5', midi: 76 },
+    { key: '1110111', label: '中音2', note: 'D5', midi: 74 }
+];
+let hulusiPlayMode = localStorage.getItem(HULUSI_PLAY_MODE_STORAGE_KEY) === 'real' ? 'real' : 'demo';
+let hulusiRealFingeringStates = loadHulusiRealFingeringStates();
 
 function midiToFrequencyPlain(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);
@@ -2789,6 +2971,91 @@ function getHulusiDemoNote(displayNumber) {
         isCrossFingering: false,
         effectiveLengthRatio: baseFreq / freq
     };
+}
+
+function loadHulusiRealFingeringStates() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(HULUSI_REAL_FINGERING_STORAGE_KEY) || '{}') || {};
+        return { ...HULUSI_REAL_DEFAULT_STATES, ...saved };
+    } catch (err) {
+        return { ...HULUSI_REAL_DEFAULT_STATES };
+    }
+}
+
+function saveHulusiRealFingeringStates() {
+    try {
+        localStorage.setItem(HULUSI_REAL_FINGERING_STORAGE_KEY, JSON.stringify(hulusiRealFingeringStates));
+    } catch (err) {}
+}
+
+function refreshHulusiRealVoiceIfActive() {
+    const player = getHulusiCurrentPlayer();
+    if (player && player.playMode === 'real' && player.currentVoice) {
+        player.startRealFingering(player.realPointerId || 'panel');
+    }
+}
+
+function hulusiStateValue(state) {
+    if (state === 'closed') return 1;
+    if (state === 'half') return 0.5;
+    return 0;
+}
+
+function hulusiRealFingeringKey(states = hulusiRealFingeringStates, halfAsClosed = false) {
+    return Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
+        const state = states[i + 1] || 'open';
+        if (state === 'half') return halfAsClosed ? '1' : 'h';
+        return state === 'closed' ? '1' : '0';
+    }).join('');
+}
+
+function getHulusiRealFingeringNote(states = hulusiRealFingeringStates) {
+    const key = hulusiRealFingeringKey(states, false);
+    const closedKey = hulusiRealFingeringKey(states, true);
+    const exact = HULUSI_REAL_FINGERINGS.find((item) => item.key === key) ||
+        HULUSI_REAL_FINGERINGS.find((item) => item.key === closedKey);
+    const values = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => hulusiStateValue(states[i + 1]));
+    const halfCount = values.filter((value) => value === 0.5).length;
+    let note = exact;
+
+    if (!note) {
+        let best = null;
+        for (const candidate of HULUSI_REAL_FINGERINGS) {
+            const candidateValues = candidate.key.split('').map((char) => char === '1' ? 1 : 0);
+            const score = candidateValues.reduce((sum, value, index) => sum + Math.abs(value - values[index]), 0);
+            if (!best || score < best.score) best = { candidate, score };
+        }
+        note = best?.candidate || HULUSI_REAL_FINGERINGS[0];
+    }
+
+    const cents = halfCount ? -Math.min(45, halfCount * 18) : 0;
+    const midi = note.midi + cents / 100;
+    const baseFreq = midiToFrequencyPlain(getHulusiBaseMidi());
+    const freq = midiToFrequencyPlain(midi);
+    return {
+        ...note,
+        midi,
+        label: halfCount ? `${note.label} 半孔` : note.label,
+        key,
+        displayNumber: 0,
+        downstreamClosed: halfCount,
+        isCrossFingering: !exact || halfCount > 0,
+        effectiveLengthRatio: baseFreq / freq
+    };
+}
+
+function getHulusiCurrentPlayer() {
+    return typeof getHulusiDebugPlayer === 'function' ? getHulusiDebugPlayer() : null;
+}
+
+function setHulusiPlayMode(mode) {
+    hulusiPlayMode = mode === 'real' ? 'real' : 'demo';
+    try {
+        localStorage.setItem(HULUSI_PLAY_MODE_STORAGE_KEY, hulusiPlayMode);
+    } catch (err) {}
+    const player = getHulusiCurrentPlayer();
+    if (player) player.setPlayMode(hulusiPlayMode);
+    updateHulusiFingeringPanel();
 }
 
 function normalizeHulusiFingeringInput(input) {
@@ -3109,6 +3376,9 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.currentDisplayNumber = null;
         this.currentVoice = null;
         this.currentFingering = null;
+        this.playMode = hulusiPlayMode;
+        this.realInteraction = null;
+        this.realPointerId = null;
         this.pointerHandledUntil = 0;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -3133,6 +3403,8 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.group = new THREE.Group();
         this.group.name = 'Hulusi_Touch_Holes';
         targetMesh.add(this.group);
+        this.holeCarrierMesh = targetMesh;
+        this.modelRoot = model;
 
         const rail = new THREE.Mesh(
             new THREE.BoxGeometry(layout.length * 0.92, layout.height * 0.18, layout.depth * 0.28),
@@ -3201,7 +3473,56 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             }
             this.applyHoleCalibration(hole.id);
         });
+        this.buildRealInteraction(model, targetMesh);
+        this.setPlayMode(hulusiPlayMode);
         window.dispatchEvent(new CustomEvent('hulusi-player-ready', { detail: { component: this } }));
+    },
+
+    buildRealInteraction: function (model, targetMesh) {
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        const localCenter = targetMesh.worldToLocal(center.clone());
+        const scale = targetMesh.getWorldScale(new THREE.Vector3());
+        const width = Math.max(size.x / Math.max(scale.x, 0.0001), 1);
+        const height = Math.max(size.y / Math.max(scale.y, 0.0001), 1);
+        const depth = Math.max(size.z / Math.max(scale.z, 0.0001), 0.5);
+        const hit = new THREE.Mesh(
+            new THREE.BoxGeometry(width * 1.08, height * 1.18, depth * 1.25),
+            new THREE.MeshBasicMaterial({
+                color: 0x80ffb8,
+                transparent: true,
+                opacity: HULUSI_HIT_MESH_DEBUG ? 0.10 : 0,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            })
+        );
+        hit.name = 'Hulusi_Real_Fingering_Hit';
+        hit.position.copy(localCenter);
+        hit.userData.interaction = { kind: 'hulusi-real-body' };
+        targetMesh.add(hit);
+        this.realInteraction = hit;
+    },
+
+    setPlayMode: function (mode) {
+        this.playMode = mode === 'real' ? 'real' : 'demo';
+        this.clearFingering(true);
+        this.interactives = [];
+        const demoVisible = this.playMode === 'demo';
+        this.holeMeshes.forEach((meshes) => {
+            meshes.hit.visible = demoVisible;
+            meshes.ring.visible = demoVisible;
+            meshes.cap.visible = demoVisible;
+            if (meshes.label) meshes.label.visible = demoVisible;
+            if (demoVisible) this.interactives.push(meshes.hit);
+        });
+        if (this.realInteraction) {
+            this.realInteraction.visible = this.playMode === 'real';
+            if (this.playMode === 'real') this.interactives.push(this.realInteraction);
+        }
+        updateHulusiFingeringPanel();
     },
 
     getHoleCalibration: function (holeId) {
@@ -3380,6 +3701,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.currentVoice = null;
         this.currentFingering = null;
         this.currentDisplayNumber = null;
+        this.realPointerId = null;
     },
 
     clearFingering: function (force = true) {
@@ -3392,6 +3714,32 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.currentVoice = null;
         this.currentFingering = null;
         this.currentDisplayNumber = null;
+        this.realPointerId = null;
+    },
+
+    startRealFingering: function (pointerId) {
+        unlockAudio();
+        this.realPointerId = pointerId;
+        const fingering = getHulusiRealFingeringNote(hulusiRealFingeringStates);
+        if (!this.currentVoice) {
+            this.currentVoice = createHulusiVoice(fingering, 0.88);
+        } else {
+            setHulusiVoicePitch(this.currentVoice, fingering);
+        }
+        this.currentFingering = fingering;
+        const keyText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
+            const state = hulusiRealFingeringStates[i + 1];
+            return state === 'closed' ? `${i + 1}` : state === 'half' ? `${i + 1}/` : '○';
+        }).join(' ');
+        showNotification(`真实指法 ${fingering.label} (${fingering.note})  ${keyText}`);
+    },
+
+    stopRealFingering: function (pointerId = null, force = false) {
+        if (pointerId !== null && this.realPointerId !== null && pointerId !== this.realPointerId) return;
+        if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force });
+        this.currentVoice = null;
+        this.currentFingering = null;
+        this.realPointerId = null;
     },
 
     raycastInteractives: function (evt) {
@@ -3470,7 +3818,14 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             let handled = false;
             Array.from(source.changedTouches).forEach((touch) => {
                 const hit = this.raycastAtPointer(getRuntimePointerFromTouch(touch));
-                if (!hit || hit.interaction.kind !== 'hulusi-hole') return;
+                if (!hit) return;
+                if (this.playMode === 'real') {
+                    if (hit.interaction.kind !== 'hulusi-real-body') return;
+                    handled = true;
+                    this.startRealFingering(`touch-${touch.identifier}`);
+                    return;
+                }
+                if (hit.interaction.kind !== 'hulusi-hole') return;
                 handled = true;
                 this.startHole(`touch-${touch.identifier}`, hit.interaction);
             });
@@ -3484,11 +3839,17 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         }
         if (Date.now() < this.pointerHandledUntil && (evt.type === 'touchstart' || evt.type === 'mousedown')) return;
         const hit = this.raycastInteractives(evt);
-        if (!hit || hit.interaction.kind !== 'hulusi-hole') return;
+        if (!hit) return;
+        if (this.playMode === 'real' && hit.interaction.kind !== 'hulusi-real-body') return;
+        if (this.playMode !== 'real' && hit.interaction.kind !== 'hulusi-hole') return;
         evt.stopPropagation();
         if (evt.preventDefault) evt.preventDefault();
         runtimeControlPointerActive = true;
         this.pointerHandledUntil = Date.now() + 450;
+        if (this.playMode === 'real') {
+            this.startRealFingering(getRuntimePointerId(evt));
+            return;
+        }
         this.startHole(getRuntimePointerId(evt), hit.interaction);
     },
 
@@ -3522,6 +3883,16 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     handlePointerUp: function (evt) {
         if (isRuntimeUiEvent(evt)) return;
         const source = (evt.detail && (evt.detail.mouseEvent || evt.detail.touchEvent)) || evt;
+        if (this.playMode === 'real') {
+            if (source.changedTouches && source.changedTouches.length) {
+                Array.from(source.changedTouches).forEach((touch) => this.stopRealFingering(`touch-${touch.identifier}`));
+            } else {
+                this.stopRealFingering(getRuntimePointerId(evt));
+            }
+            runtimeControlPointerActive = false;
+            if (evt.preventDefault) evt.preventDefault();
+            return;
+        }
         if (source.changedTouches && source.changedTouches.length) {
             Array.from(source.changedTouches).forEach((touch) => this.stopHole(`touch-${touch.identifier}`));
             if (!this.active.size) runtimeControlPointerActive = false;
@@ -3536,6 +3907,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     handleClick: function (evt) {
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
+        if (this.playMode === 'real') return;
         if (isRuntimeUiEvent(evt)) return;
         if (Date.now() < this.pointerHandledUntil) return;
         const hit = this.raycastInteractives(evt);
@@ -4619,6 +4991,7 @@ AFRAME.registerComponent('instrument-handler', {
         cancelActiveControlPointers();
         if (this.modelEntity.components['runtime-hulusi-player']) {
             this.modelEntity.components['runtime-hulusi-player'].clearFingering(true);
+            this.modelEntity.components['runtime-hulusi-player'].stopRealFingering(null, true);
         }
         muteOutputForMarkerLoss();
         if (this.config.model === 'runtime:drum-machine' && this.modelEntity.components['runtime-drum-machine']) {
@@ -4683,6 +5056,7 @@ AFRAME.registerComponent('instrument-handler', {
             console.log(`${this.config.name} model loaded.`);
             if (this.config.interactiveHulusi) {
                 this.modelEntity.setAttribute('runtime-hulusi-player', '');
+                showHulusiFingeringControls();
             }
             this.config.isLoaded = true;
             hideLoadingOverlay(true);
@@ -5149,6 +5523,71 @@ function selectHulusiCalibrationHole(index) {
     updateHulusiCalibrationPanel();
 }
 
+function showHulusiFingeringControls() {
+    const toggle = document.getElementById('hulusi-fingering-toggle');
+    if (toggle) toggle.classList.add('visible');
+    updateHulusiFingeringPanel();
+}
+
+function toggleHulusiFingeringPanel() {
+    const panel = document.getElementById('hulusi-fingering-panel');
+    if (!panel) return;
+    panel.classList.toggle('active');
+    updateHulusiFingeringPanel();
+}
+
+function cycleHulusiFingeringHole(displayNumber) {
+    const current = hulusiRealFingeringStates[displayNumber] || 'open';
+    const index = HULUSI_FINGERING_STATES.indexOf(current);
+    hulusiRealFingeringStates[displayNumber] = HULUSI_FINGERING_STATES[(index + 1) % HULUSI_FINGERING_STATES.length];
+    saveHulusiRealFingeringStates();
+    updateHulusiFingeringPanel();
+    refreshHulusiRealVoiceIfActive();
+}
+
+function setHulusiFingeringPreset(kind) {
+    if (kind === 'open') {
+        hulusiRealFingeringStates = Object.fromEntries(HULUSI_HOLES.map((hole) => [hole.display, 'open']));
+    } else if (kind === 'closed') {
+        hulusiRealFingeringStates = { ...HULUSI_REAL_DEFAULT_STATES };
+    } else if (kind === 'demo5') {
+        hulusiRealFingeringStates = { 1: 'open', 2: 'open', 3: 'open', 4: 'open', 5: 'open', 6: 'open', 7: 'closed' };
+    }
+    saveHulusiRealFingeringStates();
+    updateHulusiFingeringPanel();
+    refreshHulusiRealVoiceIfActive();
+}
+
+function hulusiFingeringStateLabel(state) {
+    if (state === 'closed') return '闭';
+    if (state === 'half') return '半';
+    return '开';
+}
+
+function updateHulusiFingeringPanel() {
+    const panel = document.getElementById('hulusi-fingering-panel');
+    if (!panel) return;
+    panel.querySelectorAll('[data-hulusi-mode]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.hulusiMode === hulusiPlayMode);
+    });
+    panel.querySelectorAll('[data-hulusi-fingering-hole]').forEach((button) => {
+        const display = Number(button.dataset.hulusiFingeringHole);
+        const state = hulusiRealFingeringStates[display] || 'open';
+        button.classList.remove('open', 'half', 'closed');
+        button.classList.add(state);
+        button.textContent = hulusiFingeringStateLabel(state);
+    });
+    const summary = document.getElementById('hulusi-fingering-summary');
+    if (summary) {
+        const note = getHulusiRealFingeringNote(hulusiRealFingeringStates);
+        const stateText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
+            const display = i + 1;
+            return `${display}:${hulusiFingeringStateLabel(hulusiRealFingeringStates[display])}`;
+        }).join('  ');
+        summary.textContent = `${hulusiPlayMode === 'real' ? '真实指法模式' : '简单演示模式'}  |  当前指法 ${note.label} (${note.note})  |  ${stateText}`;
+    }
+}
+
 function selectHulusiCalibrationDisplay(displayNumber) {
     selectHulusiCalibrationHole(hulusiHoleIdForDisplayNumber(displayNumber));
 }
@@ -5594,11 +6033,13 @@ function setupHulusiDebugMode() {
     setTimeout(activateDebugModel, 1200);
     debugModel.addEventListener('model-loaded', () => {
         showHulusiCalibrationPanel();
-        showNotification('葫芦丝调试模式：可直接点击音孔');
+        showHulusiFingeringControls();
+        showNotification('葫芦丝调试模式：可切换简单演示/真实指法');
         console.log('葫芦丝调试模型已加载');
     }, { once: true });
     window.addEventListener('hulusi-player-ready', () => {
         showHulusiCalibrationPanel();
+        showHulusiFingeringControls();
     }, { once: true });
 }
 
@@ -5722,6 +6163,55 @@ document.addEventListener('DOMContentLoaded', function() {
       <button class="hulusi-calibration-button warn" onclick="resetSelectedHulusiHole(false)">重置当前</button>
       <button class="hulusi-calibration-button warn" onclick="resetSelectedHulusiHole(true)">重置全部</button>
     </div>
+  </div>
+
+  <button id="hulusi-fingering-toggle" class="hulusi-fingering-toggle" onclick="toggleHulusiFingeringPanel()">指法</button>
+
+  <div id="hulusi-fingering-panel" class="hulusi-fingering-panel">
+    <div class="hulusi-fingering-header">
+      <span class="hulusi-fingering-title">葫芦丝指法</span>
+      <button class="hulusi-fingering-button" onclick="toggleHulusiFingeringPanel()">收起</button>
+    </div>
+    <div class="hulusi-fingering-mode">
+      <button class="hulusi-fingering-button" data-hulusi-mode="demo" onclick="setHulusiPlayMode('demo')">简单演示</button>
+      <button class="hulusi-fingering-button" data-hulusi-mode="real" onclick="setHulusiPlayMode('real')">真实指法</button>
+    </div>
+    <div id="hulusi-fingering-hole-list">
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 1</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="1" onclick="cycleHulusiFingeringHole(1)">闭</button>
+      </div>
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 2</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="2" onclick="cycleHulusiFingeringHole(2)">闭</button>
+      </div>
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 3</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="3" onclick="cycleHulusiFingeringHole(3)">闭</button>
+      </div>
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 4</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="4" onclick="cycleHulusiFingeringHole(4)">闭</button>
+      </div>
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 5</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="5" onclick="cycleHulusiFingeringHole(5)">闭</button>
+      </div>
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 6</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="6" onclick="cycleHulusiFingeringHole(6)">闭</button>
+      </div>
+      <div class="hulusi-fingering-row">
+        <span class="hulusi-fingering-hole-label">孔 7</span>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="7" onclick="cycleHulusiFingeringHole(7)">闭</button>
+      </div>
+    </div>
+    <div class="hulusi-fingering-actions">
+      <button class="hulusi-fingering-button" onclick="setHulusiFingeringPreset('closed')">全闭</button>
+      <button class="hulusi-fingering-button" onclick="setHulusiFingeringPreset('open')">全开</button>
+      <button class="hulusi-fingering-button" onclick="setHulusiFingeringPreset('demo5')">只闭7</button>
+    </div>
+    <div id="hulusi-fingering-summary" class="hulusi-fingering-summary"></div>
   </div>
   
   <div id="dock-container" class="dock-container">
