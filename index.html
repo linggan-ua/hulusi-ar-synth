@@ -942,14 +942,22 @@
         }
 
         .hulusi-fingering-hole-button {
-            width: 100%;
-            min-height: 38px;
+            width: 46px;
+            min-width: 46px;
+            min-height: 40px;
+            aspect-ratio: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border: 1px solid rgba(255, 255, 255, 0.26);
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.12);
             color: #fff;
-            font-size: 13px;
+            font-family: "Arial Unicode MS", "Noto Sans Symbols 2", "Noto Sans Symbols", system-ui, sans-serif;
+            font-size: 24px;
             font-weight: 820;
+            line-height: 1;
+            padding: 0;
             cursor: pointer;
         }
 
@@ -2868,6 +2876,7 @@ const HULUSI_HOLES = [
 ];
 const HULUSI_HOLE_MESH_NAME_HINT = '001001';
 const HULUSI_HIT_MESH_DEBUG = true;
+const HULUSI_REAL_HIT_MESH_DEBUG = false;
 const HULUSI_HOLE_SURFACE_OFFSET = 0.62;
 const HULUSI_HOLE_CENTER_Y_OFFSET = 0.00;
 const HULUSI_HOLE_HIT_WIDTH_SCALE = 2.05;
@@ -3482,7 +3491,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             new THREE.MeshBasicMaterial({
                 color: 0x80ffb8,
                 transparent: true,
-                opacity: HULUSI_HIT_MESH_DEBUG ? 0.10 : 0,
+                opacity: HULUSI_REAL_HIT_MESH_DEBUG ? 0.10 : 0,
                 depthWrite: false,
                 side: THREE.DoubleSide
             })
@@ -5552,6 +5561,12 @@ function hulusiFingeringStateLabel(state) {
     return '开';
 }
 
+function hulusiFingeringStateSymbol(state) {
+    if (state === 'closed') return '●';
+    if (state === 'half') return '◐';
+    return '○';
+}
+
 function updateHulusiFingeringPanel() {
     const panel = document.getElementById('hulusi-fingering-panel');
     if (!panel) return;
@@ -5563,14 +5578,16 @@ function updateHulusiFingeringPanel() {
         const state = hulusiRealFingeringStates[display] || 'open';
         button.classList.remove('open', 'half', 'closed');
         button.classList.add(state);
-        button.textContent = hulusiFingeringStateLabel(state);
+        button.textContent = hulusiFingeringStateSymbol(state);
+        button.title = `孔 ${display}: ${hulusiFingeringStateLabel(state)}`;
+        button.setAttribute('aria-label', `孔 ${display}: ${hulusiFingeringStateLabel(state)}`);
     });
     const summary = document.getElementById('hulusi-fingering-summary');
     if (summary) {
         const note = getHulusiRealFingeringNote(hulusiRealFingeringStates);
         const stateText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
             const display = i + 1;
-            return `${display}:${hulusiFingeringStateLabel(hulusiRealFingeringStates[display])}`;
+            return `${display}${hulusiFingeringStateSymbol(hulusiRealFingeringStates[display])}`;
         }).join('  ');
         summary.textContent = `${hulusiPlayMode === 'real' ? '真实指法模式' : '简单演示模式'}  |  当前指法 ${note.label} (${note.note})  |  ${stateText}`;
     }
@@ -6167,31 +6184,31 @@ document.addEventListener('DOMContentLoaded', function() {
     <div id="hulusi-fingering-hole-list">
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 1</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="1" onclick="cycleHulusiFingeringHole(1)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="1" onclick="cycleHulusiFingeringHole(1)">●</button>
       </div>
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 2</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="2" onclick="cycleHulusiFingeringHole(2)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="2" onclick="cycleHulusiFingeringHole(2)">●</button>
       </div>
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 3</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="3" onclick="cycleHulusiFingeringHole(3)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="3" onclick="cycleHulusiFingeringHole(3)">●</button>
       </div>
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 4</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="4" onclick="cycleHulusiFingeringHole(4)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="4" onclick="cycleHulusiFingeringHole(4)">●</button>
       </div>
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 5</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="5" onclick="cycleHulusiFingeringHole(5)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="5" onclick="cycleHulusiFingeringHole(5)">●</button>
       </div>
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 6</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="6" onclick="cycleHulusiFingeringHole(6)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="6" onclick="cycleHulusiFingeringHole(6)">●</button>
       </div>
       <div class="hulusi-fingering-row">
         <span class="hulusi-fingering-hole-label">孔 7</span>
-        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="7" onclick="cycleHulusiFingeringHole(7)">闭</button>
+        <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="7" onclick="cycleHulusiFingeringHole(7)">●</button>
       </div>
     </div>
     <div class="hulusi-fingering-actions">
