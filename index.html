@@ -3127,7 +3127,7 @@ function getHulusiAcousticFingering(states = hulusiRealFingeringStates) {
     const cents = Math.round((midi - nearestMidi) * 100);
     const standardMidi = exact ? exact.midi : null;
     const standardCents = exact ? Math.round((midi - standardMidi) * 100) : cents;
-    const forceTablePitch = hulusiTubeTonic !== '5' && Boolean(exact) && halfCount === 0;
+    const forceTablePitch = Boolean(exact) && halfCount === 0;
     const standardLike = Boolean(exact) && halfCount === 0 && (forceTablePitch || Math.abs(standardCents) <= 40);
     const instability = clampHulusiValue(
         halfCount * 0.18 + closedDownstream * 0.045 + upstreamLeak * 0.08 + (!exact ? 0.16 : 0),
