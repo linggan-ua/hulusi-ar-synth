@@ -234,6 +234,45 @@
       grid-template-rows: 42px 1fr;
     }
 
+    .stage-header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .stage-zoom-controls {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      overflow: hidden;
+      background: #171c22;
+      flex: 0 0 auto;
+    }
+
+    .stage-zoom-controls button {
+      width: 30px;
+      height: 28px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .stage-zoom-controls button:last-child {
+      border-right: 0;
+      font-size: 15px;
+    }
+
+    .stage-zoom-controls button:hover {
+      background: #28313b;
+      color: var(--cyan);
+    }
+
     .synth-panel {
       min-height: 0;
       padding: 12px;
@@ -549,10 +588,17 @@
       <section class="stage-card">
         <div class="card-header">
           <strong>真实模型交互区</strong>
-          <span class="status-dot">无扫码调试 / 摄像头背景已隐藏</span>
+          <div class="stage-header-actions">
+            <span class="status-dot">无扫码调试 / 摄像头背景已隐藏</span>
+            <div class="stage-zoom-controls" aria-label="模型缩放">
+              <button type="button" data-view-action="zoom-out" title="缩小模型">−</button>
+              <button type="button" data-view-action="zoom-in" title="放大模型">+</button>
+              <button type="button" data-view-action="reset" title="复位模型视角">↺</button>
+            </div>
+          </div>
         </div>
         <div class="stage-frame">
-          <iframe id="hulusiFrame" src="index.html?embed=hulusi-demo" title="葫芦丝真实模型交互演示"></iframe>
+          <iframe id="hulusiFrame" src="index.html?embed=hulusi-demo&demoVersion=zoom-controls-20260629" title="葫芦丝真实模型交互演示"></iframe>
         </div>
         <div class="stage-metrics">
           <div class="metric"><span>触发孔位</span><strong id="metricHole">-</strong></div>
@@ -779,6 +825,9 @@
     document.getElementById("playCurrent").addEventListener("click", () => {
       sendFrameCommand("play-current");
       pulse(["hit", "fingering", "reed", "noise", "resonator", "output"]);
+    });
+    document.querySelectorAll("[data-view-action]").forEach((button) => {
+      button.addEventListener("click", () => sendFrameCommand("view", { action: button.dataset.viewAction }));
     });
 
     renderModules();

@@ -3096,6 +3096,30 @@ function setHulusiDemoParamMultipliers(params = {}) {
     }
 }
 
+function syncHulusiTouchInitialTransform(model = getHulusiDebugModel()) {
+    const handler = model && model.components && model.components['touch-handler'];
+    if (!handler || !handler.model) return;
+    handler.initialScale.copy(handler.model.scale);
+    handler.initialRotation.copy(handler.model.rotation);
+}
+
+function adjustHulusiEmbedDemoView(action) {
+    if (!HULUSI_EMBED_DEMO_MODE) return;
+    const model = getHulusiDebugModel();
+    if (!model) return;
+    if (action === 'reset') {
+        resetHulusiDebugView(model);
+        syncHulusiTouchInitialTransform(model);
+        return;
+    }
+    const scale = model.object3D.scale.x || HULUSI_EMBED_DEMO_MODEL_DEFAULT.scale;
+    const factor = action === 'zoom-in' ? 1.08 : action === 'zoom-out' ? 0.92 : 1;
+    const next = clampRuntimeValue(scale * factor, 0.045, 0.13);
+    model.object3D.scale.setScalar(next);
+    model.setAttribute('scale', `${next} ${next} ${next}`);
+    syncHulusiTouchInitialTransform(model);
+}
+
 function hulusiDisplayNumberForHoleId(holeId) {
     return HULUSI_HOLES.find((hole) => hole.id === holeId)?.display || holeId + 1;
 }
@@ -3175,6 +3199,8 @@ window.addEventListener('message', (event) => {
         emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'panel-command');
     } else if (data.command === 'params') {
         setHulusiDemoParamMultipliers(data.params || {});
+    } else if (data.command === 'view') {
+        adjustHulusiEmbedDemoView(data.action);
     } else if (data.command === 'play-current') {
         const player = getHulusiCurrentPlayer();
         if (player) {
@@ -5993,6 +6019,7 @@ function resetHulusiDebugView(model = getHulusiDebugModel()) {
     model.setAttribute('position', `${d.position.x} ${d.position.y} ${d.position.z}`);
     model.setAttribute('rotation', `${d.rotation.x} ${d.rotation.y} ${d.rotation.z}`);
     model.setAttribute('scale', `${d.scale} ${d.scale} ${d.scale}`);
+    syncHulusiTouchInitialTransform(model);
 }
 
 function adjustHulusiDebugView(kind, amount) {
@@ -6428,11 +6455,13 @@ function setupHulusiDebugMode() {
     debugModel.setAttribute('data-marker-id', 'marker28');
     debugModel.setAttribute('gltf-model', `url(${config.model})`);
     debugModel.setAttribute('runtime-hulusi-player', '');
-    debugModel.setAttribute('touch-handler', 'minScale: 0.12; maxScale: 1.2');
+    debugModel.setAttribute('touch-handler', HULUSI_EMBED_DEMO_MODE ? 'minScale: 0.62; maxScale: 1.55' : 'minScale: 0.12; maxScale: 1.2');
     activateDebugModel();
     scene.addEventListener('loaded', activateDebugModel, { once: true });
-    setTimeout(activateDebugModel, 300);
-    setTimeout(activateDebugModel, 1200);
+    if (!HULUSI_EMBED_DEMO_MODE) {
+        setTimeout(activateDebugModel, 300);
+        setTimeout(activateDebugModel, 1200);
+    }
     debugModel.addEventListener('model-loaded', () => {
         if (!HULUSI_EMBED_DEMO_MODE) {
             showHulusiCalibrationPanel();
