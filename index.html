@@ -6472,7 +6472,8 @@ document.addEventListener('DOMContentLoaded', function() {
   
   <div id="dock-container" class="dock-container">
     <div class="dock-bar">
-      <button id="play-btn" class="dock-button disabled" onclick="toggleAudio()"><span class="emoji">🎵</span></button>
+      <!-- Temporarily hidden for Hulusi AR scan testing; remove hidden to restore the track playback button. -->
+      <button id="play-btn" class="dock-button disabled" onclick="toggleAudio()" hidden><span class="emoji">🎵</span></button>
       <button id="info-btn" class="dock-button disabled" onclick="showInfo()"><span class="emoji">📖</span></button>
       <button id="mode-btn" class="dock-button disabled" onclick="toggleModelGestureMode()" title="控件交互模式"><span class="emoji">☝️</span></button>
       <button id="reset-btn" class="dock-button disabled" onclick="resetModel()"><span class="emoji">🔄</span></button>
