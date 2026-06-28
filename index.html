@@ -2907,7 +2907,9 @@ const HULUSI_DEBUG_MODEL_DEFAULT = {
     scale: 0.14
 };
 const HULUSI_PLAY_MODE_STORAGE_KEY = 'hulusiPlayMode.v1';
+const HULUSI_TUBE_TONIC_STORAGE_KEY = 'hulusiTubeTonic.v1';
 const HULUSI_REAL_FINGERING_STORAGE_KEY = 'hulusiRealFingering.v1';
+const HULUSI_TUBE_TONICS = ['5', '2', '1'];
 const HULUSI_FINGERING_STATES = ['open', 'half', 'closed'];
 const HULUSI_REAL_DEFAULT_STATES = {
     1: 'closed',
@@ -2932,7 +2934,41 @@ const HULUSI_REAL_FINGERINGS = [
     { key: '1101111', label: '中音3', note: 'E5', midi: 76 },
     { key: '1110111', label: '中音2', note: 'D5', midi: 74 }
 ];
+const HULUSI_REAL_FINGERINGS_TUBE_2 = [
+    { key: '1111111', label: '低音2', note: 'D4', midi: 62 },
+    { key: '1111110', label: '低音3', note: 'E4', midi: 64 },
+    { key: '1111100', label: '低音4', note: 'F4', midi: 65 },
+    { key: '1111000', label: '低音5', note: 'G4', midi: 67 },
+    { key: '1110000', label: '低音6', note: 'A4', midi: 69 },
+    { key: '1100000', label: '低音7', note: 'B4', midi: 71 },
+    { key: '1000000', label: '中音2', note: 'D5', midi: 74 },
+    { key: '0000000', label: '中音3', note: 'E5', midi: 76 },
+    { key: '0111111', label: '中音1', note: 'C5', midi: 72 },
+    { key: '1011111', label: '中音1', note: 'C5', midi: 72 },
+    { key: '1101111', label: '低音7', note: 'B4', midi: 71 },
+    { key: '1110111', label: '低音6', note: 'A4', midi: 69 }
+];
+const HULUSI_REAL_FINGERINGS_TUBE_1 = [
+    { key: '1111111', label: '低音1', note: 'C4', midi: 60 },
+    { key: '1111110', label: '低音2', note: 'D4', midi: 62 },
+    { key: '1111100', label: '低音3', note: 'E4', midi: 64 },
+    { key: '1111000', label: '低音4', note: 'F4', midi: 65 },
+    { key: '1110000', label: '低音5', note: 'G4', midi: 67 },
+    { key: '1100000', label: '低音6', note: 'A4', midi: 69 },
+    { key: '1000000', label: '中音1', note: 'C5', midi: 72 },
+    { key: '0000000', label: '中音2', note: 'D5', midi: 74 },
+    { key: '0111111', label: '低音7', note: 'B4', midi: 71 },
+    { key: '1011111', label: '低音7', note: 'B4', midi: 71 },
+    { key: '1101111', label: '低音6', note: 'A4', midi: 69 },
+    { key: '1110111', label: '低音5', note: 'G4', midi: 67 }
+];
+const HULUSI_REAL_FINGERINGS_BY_TUBE = {
+    5: HULUSI_REAL_FINGERINGS,
+    2: HULUSI_REAL_FINGERINGS_TUBE_2,
+    1: HULUSI_REAL_FINGERINGS_TUBE_1
+};
 let hulusiPlayMode = localStorage.getItem(HULUSI_PLAY_MODE_STORAGE_KEY) === 'real' ? 'real' : 'demo';
+let hulusiTubeTonic = loadHulusiTubeTonic();
 let hulusiRealFingeringStates = loadHulusiRealFingeringStates();
 
 function midiToFrequencyPlain(midi) {
@@ -2976,6 +3012,19 @@ function getHulusiBaseMidi() {
     return HULUSI_HOLES[HULUSI_HOLES.length - 1].midi;
 }
 
+function loadHulusiTubeTonic() {
+    const saved = localStorage.getItem(HULUSI_TUBE_TONIC_STORAGE_KEY);
+    return HULUSI_TUBE_TONICS.includes(saved) ? saved : '5';
+}
+
+function getHulusiRealFingeringsForTube(tonic = hulusiTubeTonic) {
+    return HULUSI_REAL_FINGERINGS_BY_TUBE[tonic] || HULUSI_REAL_FINGERINGS;
+}
+
+function getHulusiTubeClosedMidi(tonic = hulusiTubeTonic) {
+    return getHulusiRealFingeringsForTube(tonic)[0]?.midi || HULUSI_ACOUSTIC_CLOSED_MIDI;
+}
+
 function getHulusiDemoNote(displayNumber) {
     const hole = HULUSI_HOLES.find((item) => item.display === displayNumber) || HULUSI_HOLES[0];
     const baseFreq = midiToFrequencyPlain(getHulusiBaseMidi());
@@ -3012,6 +3061,15 @@ function refreshHulusiRealVoiceIfActive() {
     }
 }
 
+function setHulusiTubeTonic(tonic) {
+    hulusiTubeTonic = HULUSI_TUBE_TONICS.includes(String(tonic)) ? String(tonic) : '5';
+    try {
+        localStorage.setItem(HULUSI_TUBE_TONIC_STORAGE_KEY, hulusiTubeTonic);
+    } catch (err) {}
+    updateHulusiFingeringPanel();
+    refreshHulusiRealVoiceIfActive();
+}
+
 function hulusiOpeningValue(state) {
     return HULUSI_OPENING_VALUES[state] ?? HULUSI_OPENING_VALUES.open;
 }
@@ -3027,9 +3085,10 @@ function hulusiRealFingeringKey(states = hulusiRealFingeringStates, halfAsClosed
 function getHulusiAcousticFingering(states = hulusiRealFingeringStates) {
     const key = hulusiRealFingeringKey(states, false);
     const closedKey = hulusiRealFingeringKey(states, true);
-    const exact = HULUSI_REAL_FINGERINGS.find((item) => item.key === key) ||
-        HULUSI_REAL_FINGERINGS.find((item) => item.key === closedKey);
-    const baseFreq = midiToFrequencyPlain(HULUSI_ACOUSTIC_CLOSED_MIDI);
+    const tubeFingerings = getHulusiRealFingeringsForTube();
+    const exact = tubeFingerings.find((item) => item.key === key) ||
+        tubeFingerings.find((item) => item.key === closedKey);
+    const baseFreq = midiToFrequencyPlain(getHulusiTubeClosedMidi());
     const openings = HULUSI_HOLES.map((hole) => ({
         hole,
         state: states[hole.display] || 'open',
@@ -3067,7 +3126,8 @@ function getHulusiAcousticFingering(states = hulusiRealFingeringStates) {
     const cents = Math.round((midi - nearestMidi) * 100);
     const standardMidi = exact ? exact.midi : null;
     const standardCents = exact ? Math.round((midi - standardMidi) * 100) : cents;
-    const standardLike = Boolean(exact) && Math.abs(standardCents) <= 40 && halfCount === 0;
+    const forceTablePitch = hulusiTubeTonic !== '5' && Boolean(exact) && halfCount === 0;
+    const standardLike = Boolean(exact) && halfCount === 0 && (forceTablePitch || Math.abs(standardCents) <= 40);
     const instability = clampHulusiValue(
         halfCount * 0.18 + closedDownstream * 0.045 + upstreamLeak * 0.08 + (!exact ? 0.16 : 0),
         0,
@@ -3081,13 +3141,15 @@ function getHulusiAcousticFingering(states = hulusiRealFingeringStates) {
     const breathiness = clampHulusiValue(0.10 + halfCount * 0.13 + upstreamLeak * 0.06 + (!exact ? 0.08 : 0), 0.08, 0.52);
     const label = standardLike ? exact.label : '声学估算';
     const note = standardLike ? exact.note : noteNameForMidi(nearestMidi);
-    const displayCents = standardLike ? standardCents : cents;
+    const displayCents = standardLike ? (forceTablePitch ? 0 : standardCents) : cents;
+    const outputMidi = forceTablePitch ? standardMidi : midi;
 
     return {
         label,
         note,
-        midi,
+        midi: outputMidi,
         key,
+        tubeTonic: hulusiTubeTonic,
         displayNumber: 0,
         firstOpenHole: firstVent ? firstVent.hole.display : 0,
         effectiveLengthRatio,
@@ -5734,6 +5796,9 @@ function updateHulusiFingeringPanel() {
     panel.querySelectorAll('[data-hulusi-mode]').forEach((button) => {
         button.classList.toggle('active', button.dataset.hulusiMode === hulusiPlayMode);
     });
+    panel.querySelectorAll('[data-hulusi-tube]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.hulusiTube === hulusiTubeTonic);
+    });
     panel.querySelectorAll('[data-hulusi-fingering-hole]').forEach((button) => {
         const display = Number(button.dataset.hulusiFingeringHole);
         const panelDisplay = hulusiFingeringPanelDisplayNumber(display);
@@ -5755,7 +5820,7 @@ function updateHulusiFingeringPanel() {
         const acousticText = note.isAcousticEstimate
             ? `声学估算 ${note.note} ${formatHulusiCents(note.cents)}`
             : `${note.label} (${note.note}) ${formatHulusiCents(note.standardCents)}`;
-        summary.textContent = `${hulusiPlayMode === 'real' ? '真实指法模式' : '简单演示模式'}  |  当前 ${acousticText}  |  ${stateText}`;
+        summary.textContent = `${hulusiPlayMode === 'real' ? '真实指法模式' : '简单演示模式'}  |  筒音作${hulusiTubeTonic}  |  当前 ${acousticText}  |  ${stateText}`;
     }
 }
 
@@ -6365,6 +6430,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="hulusi-fingering-mode">
       <button class="hulusi-fingering-button" data-hulusi-mode="demo" onclick="setHulusiPlayMode('demo')">简单演示</button>
       <button class="hulusi-fingering-button" data-hulusi-mode="real" onclick="setHulusiPlayMode('real')">真实指法</button>
+    </div>
+    <div class="hulusi-fingering-mode">
+      <button class="hulusi-fingering-button" data-hulusi-tube="5" onclick="setHulusiTubeTonic('5')">筒音作5</button>
+      <button class="hulusi-fingering-button" data-hulusi-tube="2" onclick="setHulusiTubeTonic('2')">筒音作2</button>
+      <button class="hulusi-fingering-button" data-hulusi-tube="1" onclick="setHulusiTubeTonic('1')">筒音作1</button>
     </div>
     <div id="hulusi-fingering-hole-list">
       <div class="hulusi-fingering-row">
