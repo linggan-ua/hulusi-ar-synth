@@ -5780,10 +5780,6 @@ function hulusiFingeringStateSymbol(state) {
     return '○';
 }
 
-function hulusiFingeringPanelDisplayNumber(internalDisplayNumber) {
-    return HULUSI_HOLE_COUNT + 1 - internalDisplayNumber;
-}
-
 function formatHulusiCents(cents = 0) {
     const rounded = Math.round(cents || 0);
     if (Math.abs(rounded) < 1) return '0c';
@@ -5801,21 +5797,19 @@ function updateHulusiFingeringPanel() {
     });
     panel.querySelectorAll('[data-hulusi-fingering-hole]').forEach((button) => {
         const display = Number(button.dataset.hulusiFingeringHole);
-        const panelDisplay = hulusiFingeringPanelDisplayNumber(display);
         const state = hulusiRealFingeringStates[display] || 'open';
         button.classList.remove('open', 'half', 'closed');
         button.classList.add(state);
         button.textContent = hulusiFingeringStateSymbol(state);
-        button.title = `孔 ${panelDisplay}: ${hulusiFingeringStateLabel(state)}`;
-        button.setAttribute('aria-label', `孔 ${panelDisplay}: ${hulusiFingeringStateLabel(state)}`);
+        button.title = `孔 ${display}: ${hulusiFingeringStateLabel(state)}`;
+        button.setAttribute('aria-label', `孔 ${display}: ${hulusiFingeringStateLabel(state)}`);
     });
     const summary = document.getElementById('hulusi-fingering-summary');
     if (summary) {
         const note = getHulusiAcousticFingering(hulusiRealFingeringStates);
         const stateText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
             const display = HULUSI_HOLE_COUNT - i;
-            const panelDisplay = hulusiFingeringPanelDisplayNumber(display);
-            return `${panelDisplay}${hulusiFingeringStateSymbol(hulusiRealFingeringStates[display])}`;
+            return `${display}${hulusiFingeringStateSymbol(hulusiRealFingeringStates[display])}`;
         }).join('  ');
         const acousticText = note.isAcousticEstimate
             ? `声学估算 ${note.note} ${formatHulusiCents(note.cents)}`
@@ -6438,15 +6432,15 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
     <div id="hulusi-fingering-hole-list">
       <div class="hulusi-fingering-row">
-        <span class="hulusi-fingering-hole-label">孔 1</span>
+        <span class="hulusi-fingering-hole-label">孔 7</span>
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="7" onclick="cycleHulusiFingeringHole(7)">●</button>
       </div>
       <div class="hulusi-fingering-row">
-        <span class="hulusi-fingering-hole-label">孔 2</span>
+        <span class="hulusi-fingering-hole-label">孔 6</span>
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="6" onclick="cycleHulusiFingeringHole(6)">●</button>
       </div>
       <div class="hulusi-fingering-row">
-        <span class="hulusi-fingering-hole-label">孔 3</span>
+        <span class="hulusi-fingering-hole-label">孔 5</span>
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="5" onclick="cycleHulusiFingeringHole(5)">●</button>
       </div>
       <div class="hulusi-fingering-row">
@@ -6454,15 +6448,15 @@ document.addEventListener('DOMContentLoaded', function() {
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="4" onclick="cycleHulusiFingeringHole(4)">●</button>
       </div>
       <div class="hulusi-fingering-row">
-        <span class="hulusi-fingering-hole-label">孔 5</span>
+        <span class="hulusi-fingering-hole-label">孔 3</span>
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="3" onclick="cycleHulusiFingeringHole(3)">●</button>
       </div>
       <div class="hulusi-fingering-row">
-        <span class="hulusi-fingering-hole-label">孔 6</span>
+        <span class="hulusi-fingering-hole-label">孔 2</span>
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="2" onclick="cycleHulusiFingeringHole(2)">●</button>
       </div>
       <div class="hulusi-fingering-row">
-        <span class="hulusi-fingering-hole-label">孔 7</span>
+        <span class="hulusi-fingering-hole-label">孔 1</span>
         <button class="hulusi-fingering-hole-button" data-hulusi-fingering-hole="1" onclick="cycleHulusiFingeringHole(1)">●</button>
       </div>
     </div>
