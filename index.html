@@ -3019,6 +3019,9 @@ const HULUSI_DEMO_PARAM_DEFAULTS = {
     outputSustain: 1
 };
 let hulusiDemoParamMultipliers = { ...HULUSI_DEMO_PARAM_DEFAULTS };
+let hulusiDemoAnalyser = null;
+let hulusiDemoScopeBuffer = null;
+let hulusiDemoScopeTimer = 0;
 
 function midiToFrequencyPlain(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);
@@ -3095,6 +3098,52 @@ function setHulusiDemoParamMultipliers(params = {}) {
         emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'panel-params');
     }
 }
+
+function ensureHulusiDemoAnalyser() {
+    const ctx = ensureAudio();
+    if (!ctx) return null;
+    if (!hulusiDemoAnalyser || hulusiDemoAnalyser.context !== ctx) {
+        hulusiDemoAnalyser = ctx.createAnalyser();
+        hulusiDemoAnalyser.fftSize = 1024;
+        hulusiDemoAnalyser.smoothingTimeConstant = 0.35;
+        hulusiDemoScopeBuffer = new Uint8Array(hulusiDemoAnalyser.fftSize);
+    }
+    return hulusiDemoAnalyser;
+}
+
+function startHulusiDemoScopeStream() {
+    if (!HULUSI_EMBED_DEMO_MODE || hulusiDemoScopeTimer) return;
+    hulusiDemoScopeTimer = window.setInterval(() => {
+        if (!hulusiDemoAnalyser || !hulusiDemoScopeBuffer) return;
+        hulusiDemoAnalyser.getByteTimeDomainData(hulusiDemoScopeBuffer);
+        const stride = Math.max(1, Math.floor(hulusiDemoScopeBuffer.length / 160));
+        const samples = [];
+        for (let i = 0; i < hulusiDemoScopeBuffer.length; i += stride) {
+            samples.push(hulusiDemoScopeBuffer[i]);
+        }
+        window.parent?.postMessage({
+            type: 'hulusi-demo-scope',
+            samples
+        }, '*');
+    }, 45);
+}
+
+window.__ensureHulusiDemoScope = function () {
+    const analyser = ensureHulusiDemoAnalyser();
+    startHulusiDemoScopeStream();
+    return Boolean(analyser);
+};
+
+window.__getHulusiDemoScopeSamples = function () {
+    if (!hulusiDemoAnalyser || !hulusiDemoScopeBuffer) return null;
+    hulusiDemoAnalyser.getByteTimeDomainData(hulusiDemoScopeBuffer);
+    const stride = Math.max(1, Math.floor(hulusiDemoScopeBuffer.length / 160));
+    const samples = [];
+    for (let i = 0; i < hulusiDemoScopeBuffer.length; i += stride) {
+        samples.push(hulusiDemoScopeBuffer[i]);
+    }
+    return samples;
+};
 
 function syncHulusiTouchInitialTransform(model = getHulusiDebugModel()) {
     const handler = model && model.components && model.components['touch-handler'];
@@ -3202,10 +3251,14 @@ window.addEventListener('message', (event) => {
     } else if (data.command === 'view') {
         adjustHulusiEmbedDemoView(data.action);
     } else if (data.command === 'play-current') {
+        ensureHulusiDemoAnalyser();
+        startHulusiDemoScopeStream();
         const player = getHulusiCurrentPlayer();
         if (player) {
             player.startRealFingering('panel');
             window.setTimeout(() => player.stopRealFingering('panel', true), 900);
+        } else {
+            emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'panel-command');
         }
     }
 });
@@ -3318,7 +3371,8 @@ function getHulusiCurrentPlayer() {
 function emitHulusiDemoState(fingering, source = 'model') {
     if (!HULUSI_EMBED_DEMO_MODE || !fingering) return;
     const freq = midiToFrequencyPlain(fingering.midi);
-    const acoustic = getHulusiAcousticParams(fingering, freq, 0.88);
+    const baseAcoustic = getHulusiAcousticParams(fingering, freq, 0.88, false);
+    const acoustic = getHulusiAcousticParams(fingering, freq, 0.88, true);
     window.parent?.postMessage({
         type: 'hulusi-demo-state',
         source,
@@ -3334,7 +3388,8 @@ function emitHulusiDemoState(fingering, source = 'model') {
             isAcousticEstimate: Boolean(fingering.isAcousticEstimate),
             standardLike: Boolean(fingering.standardLike)
         },
-        acoustic
+        acoustic,
+        baseAcoustic
     }, '*');
 }
 
@@ -3379,7 +3434,7 @@ function normalizeHulusiFingeringInput(input) {
     };
 }
 
-function getHulusiAcousticParams(fingering, freq, velocity = 0.82) {
+function getHulusiAcousticParams(fingering, freq, velocity = 0.82, applyDemoParams = true) {
     const lengthRatio = clampHulusiValue(fingering.effectiveLengthRatio || 1, 0.43, 1.04);
     const shortness = clampHulusiValue((1.04 - lengthRatio) / 0.61, 0, 1);
     const downstream = clampHulusiValue(fingering.downstreamClosed || 0, 0, HULUSI_HOLE_COUNT);
@@ -3416,7 +3471,7 @@ function getHulusiAcousticParams(fingering, freq, velocity = 0.82) {
         vibratoDepth: clampHulusiValue(5.8 + instability * 2.6, 4.8, 7.8),
         pressureDepth: clampHulusiValue(0.035 + instability * 0.026 + breathiness * 0.010, 0.025, 0.075) * velocity
     };
-    return HULUSI_EMBED_DEMO_MODE ? applyHulusiDemoParamMultipliers(acoustic) : acoustic;
+    return HULUSI_EMBED_DEMO_MODE && applyDemoParams ? applyHulusiDemoParamMultipliers(acoustic) : acoustic;
 }
 
 function createHulusiVoice(fingeringInput, velocity = 0.82) {
@@ -3546,6 +3601,13 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     airLowpass.connect(output);
     output.connect(masterGain);
     if (fxSend) output.connect(fxSend);
+    if (HULUSI_EMBED_DEMO_MODE) {
+        const analyser = ensureHulusiDemoAnalyser();
+        if (analyser) {
+            output.connect(analyser);
+            startHulusiDemoScopeStream();
+        }
+    }
 
     oscillator.start(now);
     subOscillator.start(now);

@@ -386,6 +386,7 @@
       display: grid;
       place-items: center;
       gap: 5px;
+      user-select: none;
     }
 
     .dial {
@@ -398,6 +399,8 @@
       border: 3px solid #101419;
       box-shadow: inset 0 0 0 1px #53606e, 0 7px 16px rgba(0,0,0,0.32);
       position: relative;
+      cursor: ns-resize;
+      touch-action: none;
     }
 
     .dial::after {
@@ -412,9 +415,9 @@
       background: #eef6f8;
     }
 
-    .knob input {
-      width: 100%;
-      accent-color: var(--cyan);
+    .knob.dragging {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 1px rgba(57, 195, 230, 0.38);
     }
 
     .knob strong {
@@ -424,6 +427,7 @@
     .knob span {
       color: var(--muted);
       font-size: 11px;
+      font-variant-numeric: tabular-nums;
     }
 
     .fader-bank {
@@ -489,25 +493,14 @@
       overflow: hidden;
     }
 
-    .scope-line {
+    .scope canvas {
       position: absolute;
-      left: 14px;
-      right: 14px;
-      top: 50%;
-      height: 3px;
-      border-radius: 3px;
-      background: linear-gradient(90deg, transparent, var(--cyan), var(--green), transparent);
-      box-shadow: 0 0 18px rgba(57,195,230,0.5);
-      transform: translateY(-50%);
-    }
-
-    .scope.active .scope-line {
-      animation: wavePulse 420ms ease-in-out 4;
-    }
-
-    @keyframes wavePulse {
-      0%, 100% { transform: translateY(-50%) scaleY(1); }
-      50% { transform: translateY(-50%) scaleY(9); }
+      left: 12px;
+      right: 12px;
+      top: 42px;
+      bottom: 12px;
+      width: calc(100% - 24px);
+      height: calc(100% - 54px);
     }
 
     .note-card {
@@ -610,20 +603,20 @@
 
       <section class="synth-card">
         <div class="card-header">
-          <strong>HULUSI WEB SYNTH ENGINE</strong>
-          <span>WebAudio 本地运行 / 无采样包</span>
+          <strong>WEB SYNTH / FX UNIT</strong>
+          <span>Generic WebAudio synthesizer / live parameter control</span>
         </div>
         <div class="synth-panel">
           <div class="signal-strip" id="signalStrip"></div>
 
           <div class="hardware-grid">
             <div class="hardware-section">
-              <div class="section-label"><span>Oscillator / Resonator</span><span id="engineReadout">READY</span></div>
+              <div class="section-label"><span>Oscillator / Modulation</span><span id="engineReadout">READY</span></div>
               <div class="knob-grid" id="knobGrid"></div>
             </div>
 
             <div class="hardware-section">
-              <div class="section-label"><span>Envelope / Filter Faders</span><span>实时可调</span></div>
+              <div class="section-label"><span>Filter / Effects Faders</span><span>实时可调</span></div>
               <div class="fader-bank" id="faderBank"></div>
             </div>
           </div>
@@ -631,15 +624,15 @@
           <div class="bottom-row">
             <div class="scope" id="scope">
               <div class="section-label"><span>Output Scope</span><span id="scopeText">waiting input</span></div>
-              <div class="scope-line"></div>
+              <canvas id="scopeCanvas" width="720" height="180" aria-label="实时音频波形"></canvas>
             </div>
             <div class="note-card">
-              <div><span>等效管长</span><strong id="metricLength">1.00</strong></div>
-              <div><span>簧片能量</span><strong id="metricReed">0.36</strong></div>
-              <div><span>气声</span><strong id="metricBreath">0.019</strong></div>
-              <div><span>主管共鸣</span><strong id="metricPipe">862 Hz</strong></div>
-              <div><span>葫芦腔</span><strong id="metricGourd">365 Hz</strong></div>
-              <div><span>输出</span><strong id="metricOut">0.58</strong></div>
+              <div><span>OSC LEVEL</span><strong id="metricOsc">0.36</strong></div>
+              <div><span>NOISE MIX</span><strong id="metricNoise">0.019</strong></div>
+              <div><span>TONE FREQ</span><strong id="metricTone">862 Hz</strong></div>
+              <div><span>FORMANT</span><strong id="metricFormant">365 Hz</strong></div>
+              <div><span>MOD DEPTH</span><strong id="metricMod">5.8 ct</strong></div>
+              <div><span>MASTER</span><strong id="metricOut">0.58</strong></div>
             </div>
           </div>
         </div>
@@ -649,27 +642,27 @@
 
   <script>
     const signalModules = [
-      ["hit", "触摸", "音孔碰撞体"],
-      ["fingering", "指法", "开闭孔/管长"],
-      ["reed", "簧片", "谐波+整形"],
-      ["noise", "气声", "吹气/吐音"],
-      ["resonator", "共鸣", "葫芦腔/主管"],
-      ["output", "输出", "包络/音量"]
+      ["input", "INPUT", "trigger / gate"],
+      ["osc", "OSC", "level / harmonic"],
+      ["noise", "NOISE", "mix / transient"],
+      ["filter", "FILTER", "tone / resonance"],
+      ["mod", "MOD", "vibrato / motion"],
+      ["output", "OUTPUT", "envelope / level"]
     ];
 
     const controls = [
-      { id: "reedSustain", label: "REED", kind: "knob", value: 1, min: 0.2, max: 1.8 },
-      { id: "pipeFrequency", label: "PIPE FREQ", kind: "knob", value: 1, min: 0.65, max: 1.45 },
-      { id: "gourdFrequency", label: "GOURD", kind: "knob", value: 1, min: 0.65, max: 1.45 },
-      { id: "nasalFrequency", label: "NASAL", kind: "knob", value: 1, min: 0.65, max: 1.45 },
-      { id: "vibratoDepth", label: "VIB", kind: "knob", value: 1, min: 0, max: 1.8 },
-      { id: "pressureDepth", label: "PRESS", kind: "knob", value: 1, min: 0, max: 2.2 },
-      { id: "breathSustain", label: "BREATH", kind: "fader", value: 1, min: 0, max: 2.2 },
-      { id: "chiffFrequency", label: "CHIFF", kind: "fader", value: 1, min: 0.55, max: 1.55 },
-      { id: "pipeQ", label: "PIPE Q", kind: "fader", value: 1, min: 0.35, max: 1.8 },
-      { id: "pipeGain", label: "PIPE GAIN", kind: "fader", value: 1, min: 0.35, max: 1.8 },
-      { id: "airLowpassFrequency", label: "AIR LPF", kind: "fader", value: 1, min: 0.45, max: 1.45 },
-      { id: "outputSustain", label: "OUTPUT", kind: "fader", value: 1, min: 0.2, max: 1.6 }
+      { id: "oscLevel", target: "reedSustain", label: "OSC LEVEL", kind: "knob", value: 0.36, base: 0.36, min: 0.04, max: 0.90, step: 0.005, unit: "", digits: 3 },
+      { id: "toneFreq", target: "pipeFrequency", label: "TONE FREQ", kind: "knob", value: 862, base: 862, min: 360, max: 2200, step: 1, unit: "Hz", digits: 0 },
+      { id: "formantFreq", target: "gourdFrequency", label: "FORMANT", kind: "knob", value: 365, base: 365, min: 140, max: 960, step: 1, unit: "Hz", digits: 0 },
+      { id: "colorFreq", target: "nasalFrequency", label: "COLOR", kind: "knob", value: 880, base: 880, min: 260, max: 2600, step: 1, unit: "Hz", digits: 0 },
+      { id: "modDepth", target: "vibratoDepth", label: "MOD DEPTH", kind: "knob", value: 5.8, base: 5.8, min: 0, max: 18, step: 0.1, unit: "ct", digits: 1 },
+      { id: "shapeDrive", target: "pressureDepth", label: "DRIVE", kind: "knob", value: 0.04, base: 0.04, min: 0, max: 0.18, step: 0.001, unit: "", digits: 3 },
+      { id: "noiseMix", target: "breathSustain", label: "NOISE MIX", kind: "fader", value: 0.022, base: 0.022, min: 0, max: 0.16, step: 0.001, unit: "", digits: 3 },
+      { id: "transientFreq", target: "chiffFrequency", label: "TRANSIENT", kind: "fader", value: 2700, base: 2700, min: 600, max: 6200, step: 1, unit: "Hz", digits: 0 },
+      { id: "filterQ", target: "pipeQ", label: "FILTER Q", kind: "fader", value: 3.2, base: 3.2, min: 0.4, max: 8.5, step: 0.01, unit: "Q", digits: 2 },
+      { id: "filterGain", target: "pipeGain", label: "FILTER GAIN", kind: "fader", value: 7.0, base: 7.0, min: 0.5, max: 12, step: 0.01, unit: "dB", digits: 2 },
+      { id: "airCutoff", target: "airLowpassFrequency", label: "AIR CUTOFF", kind: "fader", value: 3550, base: 3550, min: 700, max: 8800, step: 1, unit: "Hz", digits: 0 },
+      { id: "masterLevel", target: "outputSustain", label: "MASTER", kind: "fader", value: 0.58, base: 0.58, min: 0.04, max: 1.0, step: 0.005, unit: "", digits: 3 }
     ];
 
     const state = {
@@ -678,18 +671,54 @@
       freq: 392,
       key: "1111111",
       acoustic: {
-        lengthRatio: 1,
         reedSustain: 0.36,
         breathSustain: 0.019,
         pipeFrequency: 862,
         gourdFrequency: 365,
+        nasalFrequency: 880,
+        vibratoDepth: 5.8,
+        pressureDepth: 0.04,
+        pipeQ: 3.2,
+        pipeGain: 7.0,
+        airLowpassFrequency: 3550,
+        chiffFrequency: 2700,
         outputSustain: 0.58
-      }
+      },
+      baseAcoustic: null
     };
+    let controlsTouched = false;
+    let latestScopeSamples = null;
+    let demoAudioContext = null;
+    let scopePullTimer = 0;
 
     function fmt(value, digits = 2) {
       if (!Number.isFinite(value)) return "-";
       return Math.abs(value) >= 100 ? String(Math.round(value)) : value.toFixed(digits);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function controlPercent(control) {
+      return clamp(((control.value - control.min) / (control.max - control.min)) * 100, 0, 100);
+    }
+
+    function formatControlValue(control, value = control.value) {
+      const numeric = Number.isFinite(value) ? value : control.value;
+      const text = control.digits === 0 ? String(Math.round(numeric)) : numeric.toFixed(control.digits);
+      return control.unit ? `${text} ${control.unit}` : text;
+    }
+
+    function setControlValue(control, value, markTouched = true) {
+      control.value = clamp(Number(value), control.min, control.max);
+      if (markTouched) controlsTouched = true;
+      const valueEl = document.querySelector(`[data-control-value="${control.id}"]`);
+      if (valueEl) valueEl.textContent = formatControlValue(control);
+      const input = document.querySelector(`[data-control="${control.id}"]`);
+      if (input) input.value = control.value;
+      const dial = document.querySelector(`[data-dial="${control.id}"]`);
+      if (dial) dial.style.setProperty("--value", controlPercent(control));
     }
 
     function renderModules() {
@@ -713,10 +742,9 @@
           const node = document.createElement("div");
           node.className = "knob";
           node.innerHTML = `
-            <div class="dial" style="--value:${percent}"></div>
+            <div class="dial" data-dial="${control.id}" style="--value:${percent}" role="slider" aria-label="${control.label}" aria-valuemin="${control.min}" aria-valuemax="${control.max}" aria-valuenow="${control.value}" tabindex="0"></div>
             <strong>${control.label}</strong>
-            <span data-control-value="${control.id}">x${control.value.toFixed(2)}</span>
-            <input type="range" min="${control.min}" max="${control.max}" step="0.01" value="${control.value}" data-control="${control.id}">
+            <span data-control-value="${control.id}">${formatControlValue(control)}</span>
           `;
           knobGrid.appendChild(node);
         } else {
@@ -724,8 +752,8 @@
           node.className = "fader";
           node.innerHTML = `
             <strong>${control.label}</strong>
-            <input type="range" min="${control.min}" max="${control.max}" step="0.01" value="${control.value}" data-control="${control.id}">
-            <span data-control-value="${control.id}">x${control.value.toFixed(2)}</span>
+            <input type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${control.value}" data-control="${control.id}">
+            <span data-control-value="${control.id}">${formatControlValue(control)}</span>
           `;
           faderBank.appendChild(node);
         }
@@ -733,16 +761,50 @@
       document.querySelectorAll("[data-control]").forEach((input) => {
         input.addEventListener("input", () => {
           const control = controls.find((item) => item.id === input.dataset.control);
-          control.value = Number(input.value);
-          const percent = ((control.value - control.min) / (control.max - control.min)) * 100;
-          const valueEl = document.querySelector(`[data-control-value="${control.id}"]`);
-          if (valueEl) valueEl.textContent = `x${control.value.toFixed(2)}`;
-          const dial = input.closest(".knob")?.querySelector(".dial");
-          if (dial) dial.style.setProperty("--value", percent);
-          sendFrameCommand("params", { params: currentParamMultipliers() });
-          pulse(["reed", "noise", "resonator", "output"]);
-          updatePanel();
+          if (!control) return;
+          setControlValue(control, Number(input.value));
+          commitControlChanges(["noise", "filter", "output"]);
         });
+      });
+      document.querySelectorAll("[data-dial]").forEach((dial) => attachKnobDrag(dial));
+    }
+
+    function attachKnobDrag(dial) {
+      const control = controls.find((item) => item.id === dial.dataset.dial);
+      if (!control) return;
+      let drag = null;
+      dial.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        dial.setPointerCapture(event.pointerId);
+        dial.closest(".knob")?.classList.add("dragging");
+        drag = { x: event.clientX, y: event.clientY, start: control.value };
+      });
+      dial.addEventListener("pointermove", (event) => {
+        if (!drag) return;
+        const travel = (drag.y - event.clientY) + (event.clientX - drag.x) * 0.35;
+        const next = drag.start + travel * (control.max - control.min) / 180;
+        setControlValue(control, Math.round(next / control.step) * control.step);
+        dial.setAttribute("aria-valuenow", control.value);
+        commitControlChanges(["osc", "filter", "mod", "output"]);
+      });
+      const endDrag = () => {
+        drag = null;
+        dial.closest(".knob")?.classList.remove("dragging");
+      };
+      dial.addEventListener("pointerup", endDrag);
+      dial.addEventListener("pointercancel", endDrag);
+      dial.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const direction = event.deltaY > 0 ? -1 : 1;
+        setControlValue(control, control.value + direction * control.step * 6);
+        commitControlChanges(["osc", "filter", "mod", "output"]);
+      }, { passive: false });
+      dial.addEventListener("keydown", (event) => {
+        if (!["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"].includes(event.key)) return;
+        event.preventDefault();
+        const direction = event.key === "ArrowUp" || event.key === "ArrowRight" ? 1 : -1;
+        setControlValue(control, control.value + direction * control.step * 6);
+        commitControlChanges(["osc", "filter", "mod", "output"]);
       });
     }
 
@@ -751,14 +813,29 @@
       ids.forEach((id, index) => {
         window.setTimeout(() => document.querySelector(`[data-module="${id}"]`)?.classList.add("active"), index * 60);
       });
-      const scope = document.getElementById("scope");
-      scope.classList.remove("active");
-      void scope.offsetWidth;
-      scope.classList.add("active");
     }
 
     function currentParamMultipliers() {
-      return Object.fromEntries(controls.map((control) => [control.id, control.value]));
+      return Object.fromEntries(controls.map((control) => {
+        const base = Number.isFinite(control.base) && Math.abs(control.base) > 0.000001 ? control.base : 1;
+        return [control.target, clamp(control.value / base, 0.05, 3)];
+      }));
+    }
+
+    function commitControlChanges(moduleIds) {
+      sendFrameCommand("params", { params: currentParamMultipliers() });
+      pulse(moduleIds);
+      updatePanel();
+    }
+
+    function syncControlsFromAcoustic(acoustic, baseAcoustic) {
+      if (!acoustic) return;
+      controls.forEach((control) => {
+        const base = baseAcoustic?.[control.target];
+        if (Number.isFinite(base) && Math.abs(base) > 0.000001) control.base = base;
+        const actual = acoustic?.[control.target];
+        if (!controlsTouched && Number.isFinite(actual)) setControlValue(control, actual, false);
+      });
     }
 
     function updatePanel() {
@@ -767,18 +844,18 @@
       document.getElementById("metricNote").textContent = state.note;
       document.getElementById("metricFreq").textContent = `${Math.round(state.freq)} Hz`;
       document.getElementById("metricKey").textContent = state.key;
-      document.getElementById("metricLength").textContent = fmt(acoustic.lengthRatio ?? acoustic.effectiveLengthRatio ?? 1, 2);
-      document.getElementById("metricReed").textContent = fmt(acoustic.reedSustain ?? 0.36, 2);
-      document.getElementById("metricBreath").textContent = fmt(acoustic.breathSustain ?? 0.019, 3);
-      document.getElementById("metricPipe").textContent = `${fmt(acoustic.pipeFrequency ?? 862, 0)} Hz`;
-      document.getElementById("metricGourd").textContent = `${fmt(acoustic.gourdFrequency ?? 365, 0)} Hz`;
+      document.getElementById("metricOsc").textContent = fmt(acoustic.reedSustain ?? 0.36, 3);
+      document.getElementById("metricNoise").textContent = fmt(acoustic.breathSustain ?? 0.019, 3);
+      document.getElementById("metricTone").textContent = `${fmt(acoustic.pipeFrequency ?? 862, 0)} Hz`;
+      document.getElementById("metricFormant").textContent = `${fmt(acoustic.gourdFrequency ?? 365, 0)} Hz`;
+      document.getElementById("metricMod").textContent = `${fmt(acoustic.vibratoDepth ?? 5.8, 1)} ct`;
       document.getElementById("metricOut").textContent = fmt(acoustic.outputSustain ?? 0.58, 2);
       const values = {
-        hit: state.hole,
-        fingering: `L=${fmt(acoustic.lengthRatio ?? acoustic.effectiveLengthRatio ?? 1, 2)}`,
-        reed: fmt(acoustic.reedSustain ?? 0.36, 2),
+        input: state.hole,
+        osc: fmt(acoustic.reedSustain ?? 0.36, 3),
         noise: fmt(acoustic.breathSustain ?? 0.019, 3),
-        resonator: `${fmt(acoustic.pipeFrequency ?? 862, 0)}Hz`,
+        filter: `${fmt(acoustic.pipeFrequency ?? 862, 0)}Hz`,
+        mod: `${fmt(acoustic.vibratoDepth ?? 5.8, 1)}ct`,
         output: fmt(acoustic.outputSustain ?? 0.58, 2)
       };
       Object.entries(values).forEach(([id, value]) => {
@@ -790,11 +867,11 @@
     }
 
     function resetControls() {
-      controls.forEach((control) => control.value = 1);
-      renderControls();
+      controlsTouched = false;
+      syncControlsFromAcoustic(state.baseAcoustic || state.acoustic, state.baseAcoustic || state.acoustic);
       sendFrameCommand("params", { params: currentParamMultipliers() });
       updatePanel();
-      pulse(["reed", "noise", "resonator", "output"]);
+      pulse(["osc", "noise", "filter", "mod", "output"]);
     }
 
     function sendFrameCommand(command, payload = {}) {
@@ -802,17 +879,89 @@
       frame.contentWindow?.postMessage({ type: "hulusi-demo-command", command, ...payload }, "*");
     }
 
+    function startScopePull() {
+      if (scopePullTimer) return;
+      scopePullTimer = window.setInterval(() => {
+        const frameWindow = document.getElementById("hulusiFrame")?.contentWindow;
+        try {
+          frameWindow?.__ensureHulusiDemoScope?.();
+          const samples = frameWindow?.__getHulusiDemoScopeSamples?.();
+          if (samples && samples.length) {
+            latestScopeSamples = samples;
+            window.__latestScopeSamples = latestScopeSamples;
+            drawScope(latestScopeSamples);
+          }
+        } catch (err) {}
+      }, 45);
+    }
+
+    function unlockDemoAudio() {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!demoAudioContext) demoAudioContext = new Ctx({ latencyHint: "interactive" });
+      if (demoAudioContext.state === "suspended") demoAudioContext.resume().catch(() => {});
+    }
+
     window.addEventListener("message", (event) => {
       const data = event.data || {};
+      if (data.type === "hulusi-demo-scope") {
+        latestScopeSamples = data.samples || latestScopeSamples;
+        window.__latestScopeSamples = latestScopeSamples;
+        drawScope(latestScopeSamples);
+        return;
+      }
       if (data.type !== "hulusi-demo-state") return;
       state.hole = data.fingering?.displayNumber ? `孔${data.fingering.displayNumber}` : "真实指法";
       state.note = `${data.fingering?.label || ""} ${data.fingering?.note || ""}`.trim();
       state.freq = data.fingering?.frequency || state.freq;
       state.key = data.fingering?.key || state.key;
       state.acoustic = data.acoustic || state.acoustic;
+      state.baseAcoustic = data.baseAcoustic || state.baseAcoustic || data.acoustic || state.acoustic;
+      syncControlsFromAcoustic(state.acoustic, state.baseAcoustic);
       updatePanel();
-      pulse(["hit", "fingering", "reed", "noise", "resonator", "output"]);
+      pulse(["input", "osc", "noise", "filter", "mod", "output"]);
     });
+
+    function drawScope(samples) {
+      const canvas = document.getElementById("scopeCanvas");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = "rgba(57,195,230,0.12)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= w; x += 36) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= h; y += 30) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "rgba(75,210,143,0.35)";
+      ctx.beginPath();
+      ctx.moveTo(0, h / 2);
+      ctx.lineTo(w, h / 2);
+      ctx.stroke();
+      if (!samples || samples.length < 2) return;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = "rgba(57,195,230,0.55)";
+      ctx.strokeStyle = "#39c3e6";
+      ctx.beginPath();
+      samples.forEach((sample, index) => {
+        const x = (index / (samples.length - 1)) * w;
+        const y = h / 2 + ((sample - 128) / 128) * h * 0.42;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
 
     document.querySelectorAll("[data-tube]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -823,8 +972,10 @@
 
     document.getElementById("resetParams").addEventListener("click", resetControls);
     document.getElementById("playCurrent").addEventListener("click", () => {
+      unlockDemoAudio();
+      startScopePull();
       sendFrameCommand("play-current");
-      pulse(["hit", "fingering", "reed", "noise", "resonator", "output"]);
+      pulse(["input", "osc", "noise", "filter", "mod", "output"]);
     });
     document.querySelectorAll("[data-view-action]").forEach((button) => {
       button.addEventListener("click", () => sendFrameCommand("view", { action: button.dataset.viewAction }));
@@ -833,8 +984,12 @@
     renderModules();
     renderControls();
     updatePanel();
+    drawScope(null);
     document.getElementById("hulusiFrame").addEventListener("load", () => {
-      window.setTimeout(() => sendFrameCommand("params", { params: currentParamMultipliers() }), 250);
+      window.setTimeout(() => {
+        sendFrameCommand("params", { params: currentParamMultipliers() });
+        startScopePull();
+      }, 250);
     });
   </script>
 </body>
