@@ -718,6 +718,33 @@
             font-size: 34px;
         }
 
+        body.hulusi-embed-demo {
+            background: #f6f8fb;
+            overflow: hidden;
+        }
+
+        body.hulusi-embed-demo #arjs-video,
+        body.hulusi-embed-demo #start-overlay,
+        body.hulusi-embed-demo #dock-container,
+        body.hulusi-embed-demo #info-display,
+        body.hulusi-embed-demo #info-panel,
+        body.hulusi-embed-demo #loading-overlay,
+        body.hulusi-embed-demo #hulusi-calibration-toggle,
+        body.hulusi-embed-demo #hulusi-calibration-panel,
+        body.hulusi-embed-demo #hulusi-fingering-toggle,
+        body.hulusi-embed-demo #hulusi-fingering-panel,
+        body.hulusi-embed-demo .notification {
+            display: none !important;
+        }
+
+        body.hulusi-embed-demo #ar-scene {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #f6f8fb;
+        }
+
         .hulusi-calibration-panel {
             position: fixed;
             left: 50%;
@@ -1377,7 +1404,8 @@ let loadingInterval = null; // 新增：用于管理加载动画的计时器
 let isAudioReloading = false; // 新增：防止重复触发音频重载
 let permissionCheckTimeout = null; // 新增：权限检测超时
 const debugParams = new URLSearchParams(window.location.search);
-const HULUSI_DEBUG_MODE = debugParams.get('debug') === 'hulusi' || debugParams.has('hulusiDebug');
+const HULUSI_EMBED_DEMO_MODE = debugParams.get('embed') === 'hulusi-demo';
+const HULUSI_DEBUG_MODE = HULUSI_EMBED_DEMO_MODE || debugParams.get('debug') === 'hulusi' || debugParams.has('hulusiDebug');
 const ARJS_SCENE_CONFIG = 'sourceType: webcam; debugUIEnabled: false;';
 
 // ====================================================================
@@ -2906,6 +2934,11 @@ const HULUSI_DEBUG_MODEL_DEFAULT = {
     rotation: { x: 0, y: 0, z: 0 },
     scale: 0.14
 };
+const HULUSI_EMBED_DEMO_MODEL_DEFAULT = {
+    position: { x: 0, y: -1.10, z: -9.8 },
+    rotation: { x: 90, y: 0, z: 0 },
+    scale: 0.072
+};
 const HULUSI_PLAY_MODE_STORAGE_KEY = 'hulusiPlayMode.v1';
 const HULUSI_TUBE_TONIC_STORAGE_KEY = 'hulusiTubeTonic.v1';
 const HULUSI_REAL_FINGERING_STORAGE_KEY = 'hulusiRealFingering.v1';
@@ -2971,6 +3004,21 @@ const HULUSI_REAL_FINGERINGS_BY_TUBE = {
 let hulusiPlayMode = localStorage.getItem(HULUSI_PLAY_MODE_STORAGE_KEY) === 'real' ? 'real' : 'demo';
 let hulusiTubeTonic = loadHulusiTubeTonic();
 let hulusiRealFingeringStates = loadHulusiRealFingeringStates();
+const HULUSI_DEMO_PARAM_DEFAULTS = {
+    reedSustain: 1,
+    pipeFrequency: 1,
+    gourdFrequency: 1,
+    nasalFrequency: 1,
+    vibratoDepth: 1,
+    pressureDepth: 1,
+    breathSustain: 1,
+    chiffFrequency: 1,
+    pipeQ: 1,
+    pipeGain: 1,
+    airLowpassFrequency: 1,
+    outputSustain: 1
+};
+let hulusiDemoParamMultipliers = { ...HULUSI_DEMO_PARAM_DEFAULTS };
 
 function midiToFrequencyPlain(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);
@@ -2999,6 +3047,53 @@ function scheduleAudioParam(param, value, time, glide = 0.035) {
 
 function clampHulusiValue(value, min, max) {
     return Math.max(min, Math.min(max, value));
+}
+
+function hulusiDemoParamMultiplier(id) {
+    const value = hulusiDemoParamMultipliers[id];
+    return Number.isFinite(value) ? value : 1;
+}
+
+function applyHulusiDemoParamMultipliers(acoustic) {
+    const scaled = { ...acoustic };
+    [
+        'reedSustain',
+        'pipeFrequency',
+        'gourdFrequency',
+        'nasalFrequency',
+        'vibratoDepth',
+        'pressureDepth',
+        'breathSustain',
+        'chiffFrequency',
+        'pipeQ',
+        'pipeGain',
+        'airLowpassFrequency',
+        'outputSustain'
+    ].forEach((key) => {
+        scaled[key] *= hulusiDemoParamMultiplier(key);
+    });
+    scaled.breathPeak *= hulusiDemoParamMultiplier('breathSustain');
+    scaled.reedAttack *= hulusiDemoParamMultiplier('reedSustain');
+    scaled.outputPeak *= hulusiDemoParamMultiplier('outputSustain');
+    return scaled;
+}
+
+function setHulusiDemoParamMultipliers(params = {}) {
+    hulusiDemoParamMultipliers = { ...HULUSI_DEMO_PARAM_DEFAULTS };
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (key in HULUSI_DEMO_PARAM_DEFAULTS && Number.isFinite(Number(value))) {
+            hulusiDemoParamMultipliers[key] = clampHulusiValue(Number(value), 0.05, 3);
+        }
+    });
+    const player = getHulusiCurrentPlayer();
+    if (player?.currentVoice && player.currentFingering) {
+        setHulusiVoicePitch(player.currentVoice, player.currentFingering);
+    }
+    if (player?.currentFingering) {
+        emitHulusiDemoState(player.currentFingering, 'panel-params');
+    } else if (HULUSI_EMBED_DEMO_MODE) {
+        emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'panel-params');
+    }
 }
 
 function hulusiDisplayNumberForHoleId(holeId) {
@@ -3070,6 +3165,24 @@ function setHulusiTubeTonic(tonic) {
     updateHulusiFingeringPanel();
     refreshHulusiRealVoiceIfActive();
 }
+
+window.addEventListener('message', (event) => {
+    if (!HULUSI_EMBED_DEMO_MODE) return;
+    const data = event.data || {};
+    if (data.type !== 'hulusi-demo-command') return;
+    if (data.command === 'tube') {
+        setHulusiTubeTonic(data.value);
+        emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'panel-command');
+    } else if (data.command === 'params') {
+        setHulusiDemoParamMultipliers(data.params || {});
+    } else if (data.command === 'play-current') {
+        const player = getHulusiCurrentPlayer();
+        if (player) {
+            player.startRealFingering('panel');
+            window.setTimeout(() => player.stopRealFingering('panel', true), 900);
+        }
+    }
+});
 
 function hulusiOpeningValue(state) {
     return HULUSI_OPENING_VALUES[state] ?? HULUSI_OPENING_VALUES.open;
@@ -3176,6 +3289,29 @@ function getHulusiCurrentPlayer() {
     return typeof getHulusiDebugPlayer === 'function' ? getHulusiDebugPlayer() : null;
 }
 
+function emitHulusiDemoState(fingering, source = 'model') {
+    if (!HULUSI_EMBED_DEMO_MODE || !fingering) return;
+    const freq = midiToFrequencyPlain(fingering.midi);
+    const acoustic = getHulusiAcousticParams(fingering, freq, 0.88);
+    window.parent?.postMessage({
+        type: 'hulusi-demo-state',
+        source,
+        fingering: {
+            displayNumber: fingering.displayNumber || fingering.firstOpenHole || 0,
+            label: fingering.label,
+            note: fingering.note,
+            midi: fingering.midi,
+            frequency: freq,
+            key: fingering.key || '',
+            firstOpenHole: fingering.firstOpenHole || 0,
+            effectiveLengthRatio: fingering.effectiveLengthRatio,
+            isAcousticEstimate: Boolean(fingering.isAcousticEstimate),
+            standardLike: Boolean(fingering.standardLike)
+        },
+        acoustic
+    }, '*');
+}
+
 function setHulusiPlayMode(mode) {
     hulusiPlayMode = mode === 'real' ? 'real' : 'demo';
     try {
@@ -3227,7 +3363,7 @@ function getHulusiAcousticParams(fingering, freq, velocity = 0.82) {
     const breathiness = clampHulusiValue(fingering.breathiness || 0.12, 0.08, 0.58);
     const ventStrength = clampHulusiValue(fingering.ventStrength ?? 1, 0, 1);
 
-    return {
+    const acoustic = {
         lengthRatio,
         shortness,
         damping,
@@ -3254,6 +3390,7 @@ function getHulusiAcousticParams(fingering, freq, velocity = 0.82) {
         vibratoDepth: clampHulusiValue(5.8 + instability * 2.6, 4.8, 7.8),
         pressureDepth: clampHulusiValue(0.035 + instability * 0.026 + breathiness * 0.010, 0.025, 0.075) * velocity
     };
+    return HULUSI_EMBED_DEMO_MODE ? applyHulusiDemoParamMultipliers(acoustic) : acoustic;
 }
 
 function createHulusiVoice(fingeringInput, velocity = 0.82) {
@@ -3880,6 +4017,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             setHulusiVoicePitch(this.currentVoice, fingering);
         }
         this.currentFingering = fingering;
+        emitHulusiDemoState(fingering, 'demo-hole');
         showNotification(`葫芦丝 孔${fingering.displayNumber} ${fingering.label} (${fingering.note})  触摸 ${stateText}`);
     },
 
@@ -3922,6 +4060,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         const pitchText = fingering.isAcousticEstimate
             ? `声学估算 ${fingering.note} ${formatHulusiCents(fingering.cents)}`
             : `${fingering.label} (${fingering.note}) ${formatHulusiCents(fingering.standardCents)}`;
+        emitHulusiDemoState(fingering, 'real-fingering');
         showNotification(`真实指法 ${pitchText}  ${keyText}`);
     },
 
@@ -5850,7 +5989,7 @@ function getHulusiDebugModel() {
 
 function resetHulusiDebugView(model = getHulusiDebugModel()) {
     if (!model) return;
-    const d = HULUSI_DEBUG_MODEL_DEFAULT;
+    const d = HULUSI_EMBED_DEMO_MODE ? HULUSI_EMBED_DEMO_MODEL_DEFAULT : HULUSI_DEBUG_MODEL_DEFAULT;
     model.setAttribute('position', `${d.position.x} ${d.position.y} ${d.position.z}`);
     model.setAttribute('rotation', `${d.rotation.x} ${d.rotation.y} ${d.rotation.z}`);
     model.setAttribute('scale', `${d.scale} ${d.scale} ${d.scale}`);
@@ -6229,7 +6368,17 @@ function setupHulusiDebugMode() {
     isARStarted = true;
     startOverlay?.classList.add('hidden');
     scene.classList.add('active');
-    document.getElementById('dock-container')?.classList.add('active');
+    if (!HULUSI_EMBED_DEMO_MODE) {
+        document.getElementById('dock-container')?.classList.add('active');
+    }
+    if (HULUSI_EMBED_DEMO_MODE) {
+        document.body.classList.add('hulusi-embed-demo');
+        document.getElementById('dock-container')?.classList.remove('active');
+        document.getElementById('hulusi-calibration-toggle')?.classList.remove('active');
+        document.getElementById('hulusi-fingering-toggle')?.classList.remove('visible');
+        document.getElementById('hulusi-fingering-panel')?.classList.remove('active');
+        document.getElementById('hulusi-calibration-panel')?.classList.remove('active');
+    }
 
     currentAudioManager = {
         markerId: 'marker28',
@@ -6237,6 +6386,7 @@ function setupHulusiDebugMode() {
         get audio() { return audioCache.marker28; },
         isPlaying: false
     };
+    if (HULUSI_EMBED_DEMO_MODE) hulusiPlayMode = 'demo';
     modelGestureMode = 'interact';
     updateInfoDisplay();
     updateDockButtons();
@@ -6284,14 +6434,23 @@ function setupHulusiDebugMode() {
     setTimeout(activateDebugModel, 300);
     setTimeout(activateDebugModel, 1200);
     debugModel.addEventListener('model-loaded', () => {
-        showHulusiCalibrationPanel();
-        showHulusiFingeringControls();
-        showNotification('葫芦丝调试模式：可切换简单演示/真实指法');
+        if (!HULUSI_EMBED_DEMO_MODE) {
+            showHulusiCalibrationPanel();
+            showHulusiFingeringControls();
+            showNotification('葫芦丝调试模式：可切换简单演示/真实指法');
+        } else {
+            emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'model-loaded');
+        }
         console.log('葫芦丝调试模型已加载');
     }, { once: true });
     window.addEventListener('hulusi-player-ready', () => {
-        showHulusiCalibrationPanel();
-        showHulusiFingeringControls();
+        if (!HULUSI_EMBED_DEMO_MODE) {
+            showHulusiCalibrationPanel();
+            showHulusiFingeringControls();
+        } else {
+            setHulusiPlayMode('demo');
+            emitHulusiDemoState(getHulusiAcousticFingering(hulusiRealFingeringStates), 'player-ready');
+        }
     }, { once: true });
 }
 
@@ -6309,6 +6468,9 @@ function backToStart() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('页面加载完成，准备启动AR。');
     createStartOverlay();
+    if (HULUSI_EMBED_DEMO_MODE) {
+        window.setTimeout(() => startAR(), 0);
+    }
     
     // 设置AR场景错误处理
     setupARSceneErrorHandling();
