@@ -3012,6 +3012,7 @@ const HULUSI_DEMO_PARAM_DEFAULTS = {
     vibratoDepth: 1,
     pressureDepth: 1,
     breathSustain: 1,
+    chiffLevel: 1,
     chiffFrequency: 1,
     pipeQ: 1,
     pipeGain: 1,
@@ -3067,6 +3068,7 @@ function applyHulusiDemoParamMultipliers(acoustic) {
         'vibratoDepth',
         'pressureDepth',
         'breathSustain',
+        'chiffLevel',
         'chiffFrequency',
         'pipeQ',
         'pipeGain',
@@ -3076,6 +3078,7 @@ function applyHulusiDemoParamMultipliers(acoustic) {
         scaled[key] *= hulusiDemoParamMultiplier(key);
     });
     scaled.breathPeak *= hulusiDemoParamMultiplier('breathSustain');
+    scaled.chiffLevel *= hulusiDemoParamMultiplier('chiffLevel');
     scaled.reedAttack *= hulusiDemoParamMultiplier('reedSustain');
     scaled.outputPeak *= hulusiDemoParamMultiplier('outputSustain');
     return scaled;
@@ -3085,7 +3088,14 @@ function setHulusiDemoParamMultipliers(params = {}) {
     hulusiDemoParamMultipliers = { ...HULUSI_DEMO_PARAM_DEFAULTS };
     Object.entries(params || {}).forEach(([key, value]) => {
         if (key in HULUSI_DEMO_PARAM_DEFAULTS && Number.isFinite(Number(value))) {
-            hulusiDemoParamMultipliers[key] = clampHulusiValue(Number(value), 0.05, 3);
+            const maxMultiplier = key === 'breathSustain' ? 8
+                : key === 'chiffLevel' ? 12
+                : key === 'pipeQ' ? 5
+                : key === 'pipeGain' ? 4
+                : key === 'airLowpassFrequency' ? 4
+                : key === 'outputSustain' ? 2.2
+                : 3;
+            hulusiDemoParamMultipliers[key] = clampHulusiValue(Number(value), 0, maxMultiplier);
         }
     });
     const player = getHulusiCurrentPlayer();
@@ -3465,6 +3475,7 @@ function getHulusiAcousticParams(fingering, freq, velocity = 0.82, applyDemoPara
         octaveAttack: (0.105 - damping * 0.030 + shortness * 0.012) * velocity,
         octaveSustain: (0.055 - damping * 0.022 + shortness * 0.006) * velocity,
         droneSustain: (0.018 * (0.78 + lengthRatio * 0.22) * (0.88 + ventStrength * 0.12)) * velocity,
+        chiffLevel: 0.11 * velocity,
         chiffFrequency: 2700 + shortness * 180 - damping * 260 - instability * 160,
         outputPeak: clampHulusiValue(0.72 - damping * 0.16 - instability * 0.09, 0.48, 0.72),
         outputSustain: clampHulusiValue(0.58 - damping * 0.18 - instability * 0.10, 0.36, 0.58),
@@ -3498,10 +3509,13 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     const chiffSource = ctx.createBufferSource();
     const chiffGain = ctx.createGain();
     const chiffBandpass = ctx.createBiquadFilter();
+    const transientSource = ctx.createBufferSource();
+    const transientGain = ctx.createGain();
     const gourdResonator = ctx.createBiquadFilter();
     const pipeResonator = ctx.createBiquadFilter();
     const nasalFilter = ctx.createBiquadFilter();
     const airLowpass = ctx.createBiquadFilter();
+    const finalToneLowpass = ctx.createBiquadFilter();
     const output = ctx.createGain();
     const vibrato = ctx.createOscillator();
     const vibratoGain = ctx.createGain();
@@ -3546,6 +3560,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
 
     breathSource.buffer = makeNoiseBuffer(ctx, 2.4);
     chiffSource.buffer = makeNoiseBuffer(ctx, 0.18);
+    transientSource.buffer = breathSource.buffer;
     breathGain.gain.setValueAtTime(0.0001, now);
     breathGain.gain.linearRampToValueAtTime(acoustic.breathPeak, now + 0.028);
     breathGain.gain.setTargetAtTime(acoustic.breathSustain, now + 0.16, 0.45);
@@ -3555,8 +3570,9 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     breathBandpass.frequency.value = 1850;
     breathBandpass.Q.value = 0.9;
     chiffGain.gain.setValueAtTime(0.001, now);
-    chiffGain.gain.linearRampToValueAtTime(0.11 * velocity, now + 0.012);
+    chiffGain.gain.linearRampToValueAtTime(acoustic.chiffLevel, now + 0.012);
     chiffGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    transientGain.gain.setValueAtTime(acoustic.chiffLevel * 0.10, now);
     chiffBandpass.type = 'bandpass';
     chiffBandpass.frequency.value = acoustic.chiffFrequency;
     chiffBandpass.Q.value = 1.8;
@@ -3576,6 +3592,9 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     airLowpass.type = 'lowpass';
     airLowpass.frequency.value = acoustic.airLowpassFrequency;
     airLowpass.Q.value = 0.72;
+    finalToneLowpass.type = 'lowpass';
+    finalToneLowpass.frequency.value = acoustic.airLowpassFrequency;
+    finalToneLowpass.Q.value = 0.9;
 
     output.gain.setValueAtTime(0.0001, now);
     output.gain.linearRampToValueAtTime(acoustic.outputPeak, now + 0.035);
@@ -3594,11 +3613,14 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     chiffSource.connect(chiffGain);
     chiffGain.connect(chiffBandpass);
     chiffBandpass.connect(pipeResonator);
+    transientSource.connect(transientGain);
+    transientGain.connect(chiffBandpass);
     reedShaper.connect(gourdResonator);
     gourdResonator.connect(pipeResonator);
     pipeResonator.connect(nasalFilter);
     nasalFilter.connect(airLowpass);
-    airLowpass.connect(output);
+    airLowpass.connect(finalToneLowpass);
+    finalToneLowpass.connect(output);
     output.connect(masterGain);
     if (fxSend) output.connect(fxSend);
     if (HULUSI_EMBED_DEMO_MODE) {
@@ -3615,6 +3637,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
     breathSource.start(now);
     chiffSource.start(now);
     chiffSource.stop(now + 0.18);
+    transientSource.start(now);
     vibrato.start(now);
     pressure.start(now);
 
@@ -3633,6 +3656,7 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
         pipeResonator,
         nasalFilter,
         airLowpass,
+        finalToneLowpass,
         breathSource,
         breathGain,
         breathHighpass,
@@ -3640,6 +3664,8 @@ function createHulusiVoice(fingeringInput, velocity = 0.82) {
         chiffSource,
         chiffGain,
         chiffBandpass,
+        transientSource,
+        transientGain,
         vibrato,
         vibratoGain,
         pressure,
@@ -3669,10 +3695,13 @@ function setHulusiVoicePitch(voice, fingeringInput) {
     scheduleAudioParam(voice.nasalFilter?.frequency, acoustic.nasalFrequency, now, 0.05);
     scheduleAudioParam(voice.nasalFilter?.Q, acoustic.nasalQ, now, 0.06);
     scheduleAudioParam(voice.airLowpass?.frequency, acoustic.airLowpassFrequency, now, 0.08);
+    scheduleAudioParam(voice.finalToneLowpass?.frequency, acoustic.airLowpassFrequency, now, 0.08);
     scheduleAudioParam(voice.reedGain?.gain, acoustic.reedSustain, now, 0.10);
     scheduleAudioParam(voice.subGain?.gain, acoustic.octaveSustain, now, 0.10);
     scheduleAudioParam(voice.droneGain?.gain, acoustic.droneSustain, now, 0.16);
     scheduleAudioParam(voice.breathGain?.gain, acoustic.breathSustain, now, 0.10);
+    scheduleAudioParam(voice.chiffGain?.gain, acoustic.chiffLevel, now, 0.04);
+    scheduleAudioParam(voice.transientGain?.gain, acoustic.chiffLevel * 0.10, now, 0.04);
     scheduleAudioParam(voice.chiffBandpass?.frequency, acoustic.chiffFrequency, now, 0.05);
     scheduleAudioParam(voice.vibratoGain?.gain, acoustic.vibratoDepth, now, 0.18);
     scheduleAudioParam(voice.pressureGain?.gain, acoustic.pressureDepth, now, 0.12);
@@ -3706,6 +3735,7 @@ function releaseHulusiVoice(voice, options = {}) {
         voice.subOscillator?.stop(now + 0.16);
         voice.droneOscillator?.stop(now + 0.20);
         voice.breathSource?.stop(now + 0.16);
+        voice.transientSource?.stop(now + 0.16);
         voice.vibrato?.stop(now + 0.16);
         voice.pressure?.stop(now + 0.16);
     } catch (err) {}
@@ -3723,6 +3753,7 @@ function releaseHulusiVoice(voice, options = {}) {
             voice.pipeResonator?.disconnect();
             voice.nasalFilter?.disconnect();
             voice.airLowpass?.disconnect();
+            voice.finalToneLowpass?.disconnect();
             voice.breathSource?.disconnect();
             voice.breathGain?.disconnect();
             voice.breathHighpass?.disconnect();
@@ -3730,6 +3761,8 @@ function releaseHulusiVoice(voice, options = {}) {
             voice.chiffSource?.disconnect();
             voice.chiffGain?.disconnect();
             voice.chiffBandpass?.disconnect();
+            voice.transientSource?.disconnect();
+            voice.transientGain?.disconnect();
             voice.vibrato?.disconnect();
             voice.vibratoGain?.disconnect();
             voice.pressure?.disconnect();

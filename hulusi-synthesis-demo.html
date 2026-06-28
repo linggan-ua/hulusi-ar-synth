@@ -681,14 +681,14 @@
       { id: "toneFreq", target: "pipeFrequency", label: "音色频率", sublabel: "TONE FREQ", kind: "knob", value: 862, base: 862, min: 360, max: 2200, step: 1, unit: "Hz", digits: 0 },
       { id: "formantFreq", target: "gourdFrequency", label: "共振峰", sublabel: "FORMANT", kind: "knob", value: 365, base: 365, min: 140, max: 960, step: 1, unit: "Hz", digits: 0 },
       { id: "colorFreq", target: "nasalFrequency", label: "音色染色", sublabel: "COLOR", kind: "knob", value: 880, base: 880, min: 260, max: 2600, step: 1, unit: "Hz", digits: 0 },
-      { id: "modDepth", target: "vibratoDepth", label: "调制深度", sublabel: "MOD DEPTH", kind: "knob", value: 5.8, base: 5.8, min: 0, max: 18, step: 0.1, unit: "ct", digits: 1 },
+      { id: "modDepth", target: "vibratoDepth", label: "调制深度", sublabel: "MOD DEPTH", kind: "knob", value: 5.8, base: 5.8, min: 0, max: 36, step: 0.1, unit: "ct", digits: 1 },
       { id: "shapeDrive", target: "pressureDepth", label: "波形驱动", sublabel: "DRIVE", kind: "knob", value: 0.04, base: 0.04, min: 0, max: 0.18, step: 0.001, unit: "", digits: 3 },
-      { id: "noiseMix", target: "breathSustain", label: "噪声混合", sublabel: "NOISE MIX", kind: "effect", value: 0.022, base: 0.022, min: 0, max: 0.16, step: 0.001, unit: "", digits: 3 },
-      { id: "transientFreq", target: "chiffFrequency", label: "瞬态频率", sublabel: "TRANSIENT", kind: "effect", value: 2700, base: 2700, min: 600, max: 6200, step: 1, unit: "Hz", digits: 0 },
-      { id: "filterQ", target: "pipeQ", label: "滤波 Q 值", sublabel: "FILTER Q", kind: "effect", value: 3.2, base: 3.2, min: 0.4, max: 8.5, step: 0.01, unit: "Q", digits: 2 },
-      { id: "filterGain", target: "pipeGain", label: "滤波增益", sublabel: "FILTER GAIN", kind: "effect", value: 7.0, base: 7.0, min: 0.5, max: 12, step: 0.01, unit: "dB", digits: 2 },
-      { id: "airCutoff", target: "airLowpassFrequency", label: "空气截止", sublabel: "AIR CUTOFF", kind: "effect", value: 3550, base: 3550, min: 700, max: 8800, step: 1, unit: "Hz", digits: 0 },
-      { id: "masterLevel", target: "outputSustain", label: "主输出", sublabel: "MASTER", kind: "effect", value: 0.58, base: 0.58, min: 0.04, max: 1.0, step: 0.005, unit: "", digits: 3 }
+      { id: "noiseMix", target: "breathSustain", label: "噪声混合", sublabel: "NOISE MIX", kind: "effect", value: 0.022, base: 0.022, min: 0, max: 0.42, step: 0.001, unit: "", digits: 3 },
+      { id: "transientLevel", target: "chiffLevel", label: "瞬态电平", sublabel: "TRANSIENT", kind: "effect", value: 0.10, base: 0.10, min: 0, max: 1.2, step: 0.005, unit: "", digits: 3 },
+      { id: "filterQ", target: "pipeQ", label: "滤波 Q 值", sublabel: "FILTER Q", kind: "effect", value: 3.2, base: 3.2, min: 0.15, max: 16, step: 0.01, unit: "Q", digits: 2 },
+      { id: "filterGain", target: "pipeGain", label: "滤波增益", sublabel: "FILTER GAIN", kind: "effect", value: 7.0, base: 7.0, min: 0, max: 24, step: 0.05, unit: "dB", digits: 1 },
+      { id: "airCutoff", target: "airLowpassFrequency", label: "空气截止", sublabel: "AIR CUTOFF", kind: "effect", value: 3550, base: 3550, min: 250, max: 14500, step: 5, unit: "Hz", digits: 0 },
+      { id: "masterLevel", target: "outputSustain", label: "主输出", sublabel: "MASTER", kind: "effect", value: 0.58, base: 0.58, min: 0, max: 1.35, step: 0.005, unit: "", digits: 3 }
     ];
 
     const state = {
@@ -699,6 +699,7 @@
       acoustic: {
         reedSustain: 0.36,
         breathSustain: 0.019,
+        chiffLevel: 0.10,
         pipeFrequency: 862,
         gourdFrequency: 365,
         nasalFrequency: 880,
@@ -845,7 +846,14 @@
     function currentParamMultipliers() {
       return Object.fromEntries(controls.map((control) => {
         const base = Number.isFinite(control.base) && Math.abs(control.base) > 0.000001 ? control.base : 1;
-        return [control.target, clamp(control.value / base, 0.05, 3)];
+        const maxMultiplier = control.target === "breathSustain" ? 8
+          : control.target === "chiffLevel" ? 12
+          : control.target === "pipeQ" ? 5
+          : control.target === "pipeGain" ? 4
+          : control.target === "airLowpassFrequency" ? 4
+          : control.target === "outputSustain" ? 2.2
+          : 3;
+        return [control.target, clamp(control.value / base, 0, maxMultiplier)];
       }));
     }
 
