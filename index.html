@@ -3464,22 +3464,76 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.playMode = hulusiPlayMode;
         this.realInteraction = null;
         this.realPointerId = null;
-        this.realReleaseTimer = 0;
-        this.activePointerId = null;
-        this.activePointerStartedAt = 0;
-        this.lastSimpleRelease = null;
+        this.lastTouchEventAt = 0;
+        this.lastHandledEvent = null;
         this.pointerHandledUntil = 0;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
-        this.handleEntityClick = this.handleEntityClick.bind(this);
-        this.handleEntityMouseDown = this.handleEntityMouseDown.bind(this);
-        this.handleEntityMouseUp = this.handleEntityMouseUp.bind(this);
+        this.handleScenePointerDown = this.handleScenePointerDown.bind(this);
+        this.handleScenePointerMove = this.handleScenePointerMove.bind(this);
+        this.handleScenePointerUp = this.handleScenePointerUp.bind(this);
+        this.handleSceneTouchStart = this.handleSceneTouchStart.bind(this);
+        this.handleSceneTouchMove = this.handleSceneTouchMove.bind(this);
+        this.handleSceneTouchEnd = this.handleSceneTouchEnd.bind(this);
+        this.handleSceneMouseDown = this.handleSceneMouseDown.bind(this);
+        this.handleSceneMouseMove = this.handleSceneMouseMove.bind(this);
+        this.handleSceneMouseUp = this.handleSceneMouseUp.bind(this);
         this.el.classList.add('playable');
-        this.el.addEventListener('mousedown', this.handleEntityMouseDown);
-        this.el.addEventListener('mouseup', this.handleEntityMouseUp);
-        this.el.addEventListener('click', this.handleEntityClick);
+        this.addSceneListeners();
         this.el.addEventListener('model-loaded', () => this.build());
         if (this.el.getObject3D('mesh')) this.build();
+    },
+
+    addSceneListeners: function () {
+        const scene = this.el.sceneEl;
+        if (!scene) return;
+        this.sceneListenerOptions = { capture: false, passive: true };
+        this.sceneListenerTargets = [];
+        this.attachPointerTarget(scene);
+        if (scene.canvas) {
+            this.attachPointerTarget(scene.canvas);
+        } else {
+            scene.addEventListener('render-target-loaded', () => {
+                if (scene.canvas) this.attachPointerTarget(scene.canvas);
+            }, { once: true });
+        }
+    },
+
+    attachPointerTarget: function (target) {
+        if (!target || (this.sceneListenerTargets && this.sceneListenerTargets.includes(target))) return;
+        this.sceneListenerTargets.push(target);
+        if (window.PointerEvent) {
+            target.addEventListener('pointerdown', this.handleScenePointerDown, this.sceneListenerOptions);
+            target.addEventListener('pointermove', this.handleScenePointerMove, this.sceneListenerOptions);
+            target.addEventListener('pointerup', this.handleScenePointerUp, this.sceneListenerOptions);
+            target.addEventListener('pointercancel', this.handleScenePointerUp, this.sceneListenerOptions);
+        } else {
+            target.addEventListener('touchstart', this.handleSceneTouchStart, this.sceneListenerOptions);
+            target.addEventListener('touchmove', this.handleSceneTouchMove, this.sceneListenerOptions);
+            target.addEventListener('touchend', this.handleSceneTouchEnd, this.sceneListenerOptions);
+            target.addEventListener('touchcancel', this.handleSceneTouchEnd, this.sceneListenerOptions);
+            target.addEventListener('mousedown', this.handleSceneMouseDown, this.sceneListenerOptions);
+            target.addEventListener('mousemove', this.handleSceneMouseMove, this.sceneListenerOptions);
+            target.addEventListener('mouseup', this.handleSceneMouseUp, this.sceneListenerOptions);
+        }
+    },
+
+    removeSceneListeners: function () {
+        const options = this.sceneListenerOptions || { capture: false };
+        (this.sceneListenerTargets || []).forEach((target) => {
+            target.removeEventListener('pointerdown', this.handleScenePointerDown, options);
+            target.removeEventListener('pointermove', this.handleScenePointerMove, options);
+            target.removeEventListener('pointerup', this.handleScenePointerUp, options);
+            target.removeEventListener('pointercancel', this.handleScenePointerUp, options);
+            target.removeEventListener('touchstart', this.handleSceneTouchStart, options);
+            target.removeEventListener('touchmove', this.handleSceneTouchMove, options);
+            target.removeEventListener('touchend', this.handleSceneTouchEnd, options);
+            target.removeEventListener('touchcancel', this.handleSceneTouchEnd, options);
+            target.removeEventListener('mousedown', this.handleSceneMouseDown, options);
+            target.removeEventListener('mousemove', this.handleSceneMouseMove, options);
+            target.removeEventListener('mouseup', this.handleSceneMouseUp, options);
+        });
+        this.sceneListenerTargets = [];
     },
 
     build: function () {
@@ -3587,7 +3641,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             meshes.ring.visible = demoVisible;
             meshes.cap.visible = demoVisible;
             if (meshes.label) meshes.label.visible = demoVisible;
-            if (demoVisible) this.interactives.push(meshes.hit);
+            if (demoVisible) this.interactives.push(meshes.hit, meshes.ring, meshes.cap);
         });
         if (this.realInteraction) {
             this.realInteraction.visible = this.playMode === 'real';
@@ -3790,10 +3844,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     startRealFingering: function (pointerId) {
         unlockAudio();
-        if (this.realReleaseTimer) {
-            window.clearTimeout(this.realReleaseTimer);
-            this.realReleaseTimer = 0;
-        }
         this.realPointerId = pointerId;
         const fingering = getHulusiAcousticFingering(hulusiRealFingeringStates);
         if (!this.currentVoice) {
@@ -3814,14 +3864,6 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     stopRealFingering: function (pointerId = null, force = false) {
         if (pointerId !== null && this.realPointerId !== null && pointerId !== this.realPointerId) return;
-        if (!force) {
-            window.clearTimeout(this.realReleaseTimer);
-            this.realReleaseTimer = window.setTimeout(() => {
-                this.realReleaseTimer = 0;
-                this.stopRealFingering(pointerId, true);
-            }, 180);
-            return;
-        }
         if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force });
         this.currentVoice = null;
         this.currentFingering = null;
@@ -3894,107 +3936,144 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         }
     },
 
-    playHoleTap: function (interaction) {
-        const pointerId = `tap-${Date.now()}`;
-        this.startHole(pointerId, interaction);
-        window.setTimeout(() => {
-            this.stopHole(pointerId);
-            if (!this.active.size) runtimeControlPointerActive = false;
-        }, 260);
+    getPointerHit: function (pointer) {
+        const camera = this.el.sceneEl.camera;
+        if (!camera) return { hole: null, body: null };
+        const canvasRect = getRuntimeCanvasRect(this.el.sceneEl);
+        this.mouse.x = ((pointer.x - canvasRect.left) / canvasRect.width) * 2 - 1;
+        this.mouse.y = -((pointer.y - canvasRect.top) / canvasRect.height) * 2 + 1;
+        this.el.sceneEl.object3D.updateMatrixWorld(true);
+        this.el.object3D.updateMatrixWorld(true);
+        prepareRuntimeCameraForRaycast(camera);
+        this.raycaster.setFromCamera(this.mouse, camera);
+        let hole = null;
+        if (this.interactives.length) {
+            hole = getRuntimeRaycastHit(this.raycaster, this.interactives) ||
+                findRuntimeScreenSpaceHit(this.interactives, camera, canvasRect, pointer, 14);
+        }
+        let body = null;
+        if (this.modelRoot) {
+            const bodyHits = this.raycaster.intersectObject(this.modelRoot, true);
+            body = bodyHits.length ? bodyHits[0] : null;
+        }
+        return { hole, body };
     },
 
-    findEventInteraction: function (evt, options = {}) {
-        const preferScreenHit = options.preferScreenHit !== false;
-        if (preferScreenHit) {
-            const hit = this.raycastInteractives(evt);
-            if (hit && hit.interaction) return hit.interaction;
-        }
-        let current = evt.detail && evt.detail.intersection && evt.detail.intersection.object;
-        while (current) {
-            if (current.userData && current.userData.interaction) {
-                return current.userData.interaction;
-            }
-            current = current.parent;
-        }
-        if (!preferScreenHit) {
-            const hit = this.raycastInteractives(evt);
-            return hit && hit.interaction;
-        }
-        return null;
-    },
-
-    handleEntityMouseDown: function (evt) {
+    handleRawPointerDown: function (pointer, evt) {
+        if (!this.shouldHandleRawEvent(pointer, 'down')) return;
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
         if (isRuntimeUiEvent(evt)) return;
-        const interaction = this.playMode === 'real' ? null : this.findEventInteraction(evt);
-        if (this.playMode !== 'real' && (!interaction || interaction.kind !== 'hulusi-hole')) return;
-        evt.stopPropagation();
+        const hit = this.getPointerHit(pointer);
+        if (this.playMode === 'real' && !hit.body) return;
+        if (this.playMode !== 'real' && (!hit.hole || hit.hole.interaction.kind !== 'hulusi-hole')) return;
         runtimeControlPointerActive = true;
-        this.activePointerId = getRuntimePointerId(evt);
-        this.activePointerStartedAt = Date.now();
-        this.pointerHandledUntil = Date.now() + 220;
+        this.pointerHandledUntil = Date.now() + 80;
         if (this.playMode === 'real') {
-            this.startRealFingering(this.activePointerId);
+            this.startRealFingering(pointer.id);
             return;
         }
-        this.startHole(this.activePointerId, interaction);
+        this.startHole(pointer.id, hit.hole.interaction);
     },
 
-    handleEntityMouseUp: function (evt) {
+    handleRawPointerMove: function (pointer, evt) {
+        if (!this.shouldHandleRawEvent(pointer, 'move')) return;
         if (isRuntimeUiEvent(evt)) return;
-        const pointerId = this.activePointerId || getRuntimePointerId(evt);
-        if (this.playMode === 'real') {
-            this.stopRealFingering(pointerId);
-            runtimeControlPointerActive = false;
-            this.activePointerId = null;
-            this.activePointerStartedAt = 0;
-            return;
-        }
-        const held = this.active.get(pointerId);
-        if (held) {
-            this.lastSimpleRelease = {
-                time: Date.now(),
-                duration: Date.now() - this.activePointerStartedAt,
-                holeId: held.holeId
-            };
-        }
-        this.stopHole(pointerId);
-        if (!this.active.size) runtimeControlPointerActive = false;
-        this.activePointerId = null;
-        this.activePointerStartedAt = 0;
-    },
-
-    handleEntityClick: function (evt) {
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
         if (this.playMode === 'real') return;
+        if (!this.active.has(pointer.id)) return;
+        const hit = this.getPointerHit(pointer);
+        if (hit.hole && hit.hole.interaction.kind === 'hulusi-hole') {
+            this.slideHole(pointer.id, hit.hole.interaction);
+        }
+    },
+
+    handleRawPointerUp: function (pointer, evt) {
+        if (!this.shouldHandleRawEvent(pointer, 'up')) return;
         if (isRuntimeUiEvent(evt)) return;
-        const interaction = this.findEventInteraction(evt);
-        if (!interaction || interaction.kind !== 'hulusi-hole') return;
-        evt.stopPropagation();
-        unlockAudio();
-        if (Date.now() < this.pointerHandledUntil) {
-            const last = this.lastSimpleRelease;
-            if (last && last.holeId === interaction.id && Date.now() - last.time < 360 && last.duration < 220) {
-                this.playHoleTap(interaction);
-            }
+        if (this.playMode === 'real') {
+            this.stopRealFingering(pointer.id, true);
+            runtimeControlPointerActive = false;
             return;
         }
-        const displayNumber = hulusiDisplayNumberForHoleId(interaction.id);
-        const nextClosed = !this.closedDisplayHoles.has(displayNumber);
-        this.setHoleClosedByDisplay(displayNumber, nextClosed);
-        if (this.closedDisplayHoles.size > 0) this.updateFingeringVoice(nextClosed ? displayNumber : null);
-        else this.releaseFingeringVoiceIfOpen();
+        this.stopHole(pointer.id);
+        if (!this.active.size) runtimeControlPointerActive = false;
+    },
+
+    getPointerFromEvent: function (evt, idPrefix = 'pointer') {
+        return {
+            id: `${idPrefix}-${evt.pointerId || 1}`,
+            x: evt.clientX || 0,
+            y: evt.clientY || 0
+        };
+    },
+
+    shouldHandleRawEvent: function (pointer, phase) {
+        const now = Date.now();
+        const key = `${phase}:${pointer.id}:${Math.round(pointer.x)}:${Math.round(pointer.y)}`;
+        if (this.lastHandledEvent && this.lastHandledEvent.key === key && now - this.lastHandledEvent.time < 24) {
+            return false;
+        }
+        this.lastHandledEvent = { key, time: now };
+        return true;
+    },
+
+    handleScenePointerDown: function (evt) {
+        if (evt.pointerType === 'mouse' && Date.now() - this.lastTouchEventAt < 500) return;
+        this.handleRawPointerDown(this.getPointerFromEvent(evt), evt);
+    },
+
+    handleScenePointerMove: function (evt) {
+        if (evt.pointerType === 'mouse' && Date.now() - this.lastTouchEventAt < 500) return;
+        this.handleRawPointerMove(this.getPointerFromEvent(evt), evt);
+    },
+
+    handleScenePointerUp: function (evt) {
+        if (evt.pointerType === 'mouse' && Date.now() - this.lastTouchEventAt < 500) return;
+        this.handleRawPointerUp(this.getPointerFromEvent(evt), evt);
+    },
+
+    handleSceneTouchStart: function (evt) {
+        this.lastTouchEventAt = Date.now();
+        Array.from(evt.changedTouches || []).forEach((touch) => {
+            this.handleRawPointerDown({ id: `touch-${touch.identifier}`, x: touch.clientX, y: touch.clientY }, evt);
+        });
+    },
+
+    handleSceneTouchMove: function (evt) {
+        this.lastTouchEventAt = Date.now();
+        Array.from(evt.changedTouches || []).forEach((touch) => {
+            this.handleRawPointerMove({ id: `touch-${touch.identifier}`, x: touch.clientX, y: touch.clientY }, evt);
+        });
+    },
+
+    handleSceneTouchEnd: function (evt) {
+        this.lastTouchEventAt = Date.now();
+        Array.from(evt.changedTouches || []).forEach((touch) => {
+            this.handleRawPointerUp({ id: `touch-${touch.identifier}`, x: touch.clientX, y: touch.clientY }, evt);
+        });
+    },
+
+    handleSceneMouseDown: function (evt) {
+        if (Date.now() - this.lastTouchEventAt < 500) return;
+        this.handleRawPointerDown({ id: 'mouse-1', x: evt.clientX, y: evt.clientY }, evt);
+    },
+
+    handleSceneMouseMove: function (evt) {
+        if (Date.now() - this.lastTouchEventAt < 500) return;
+        this.handleRawPointerMove({ id: 'mouse-1', x: evt.clientX, y: evt.clientY }, evt);
+    },
+
+    handleSceneMouseUp: function (evt) {
+        if (Date.now() - this.lastTouchEventAt < 500) return;
+        this.handleRawPointerUp({ id: 'mouse-1', x: evt.clientX, y: evt.clientY }, evt);
     },
 
     remove: function () {
         this.active.forEach((held, pointerId) => this.stopHole(pointerId, true));
         if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force: true });
-        window.clearTimeout(this.realReleaseTimer);
-        this.el.removeEventListener('mousedown', this.handleEntityMouseDown);
-        this.el.removeEventListener('mouseup', this.handleEntityMouseUp);
-        this.el.removeEventListener('click', this.handleEntityClick);
+        this.removeSceneListeners();
     }
 });
 
