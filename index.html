@@ -2911,6 +2911,7 @@ const HULUSI_TUBE_TONIC_STORAGE_KEY = 'hulusiTubeTonic.v1';
 const HULUSI_REAL_FINGERING_STORAGE_KEY = 'hulusiRealFingering.v1';
 const HULUSI_TUBE_TONICS = ['5', '2', '1'];
 const HULUSI_FINGERING_STATES = ['open', 'half', 'closed'];
+const HULUSI_FINGERING_TABLE_ORDER = [7, 6, 5, 4, 3, 2, 1];
 const HULUSI_REAL_DEFAULT_STATES = {
     1: 'closed',
     2: 'closed',
@@ -3075,8 +3076,8 @@ function hulusiOpeningValue(state) {
 }
 
 function hulusiRealFingeringKey(states = hulusiRealFingeringStates, halfAsClosed = false) {
-    return Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
-        const state = states[i + 1] || 'open';
+    return HULUSI_FINGERING_TABLE_ORDER.map((displayNumber) => {
+        const state = states[displayNumber] || 'open';
         if (state === 'half') return halfAsClosed ? '1' : 'h';
         return state === 'closed' ? '1' : '0';
     }).join('');
@@ -3914,9 +3915,9 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             setHulusiVoicePitch(this.currentVoice, fingering);
         }
         this.currentFingering = fingering;
-        const keyText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
-            const state = hulusiRealFingeringStates[i + 1];
-            return state === 'closed' ? `${i + 1}` : state === 'half' ? `${i + 1}/` : '○';
+        const keyText = HULUSI_FINGERING_TABLE_ORDER.map((displayNumber) => {
+            const state = hulusiRealFingeringStates[displayNumber];
+            return state === 'closed' ? `${displayNumber}` : state === 'half' ? `${displayNumber}/` : '○';
         }).join(' ');
         const pitchText = fingering.isAcousticEstimate
             ? `声学估算 ${fingering.note} ${formatHulusiCents(fingering.cents)}`
@@ -5807,8 +5808,7 @@ function updateHulusiFingeringPanel() {
     const summary = document.getElementById('hulusi-fingering-summary');
     if (summary) {
         const note = getHulusiAcousticFingering(hulusiRealFingeringStates);
-        const stateText = Array.from({ length: HULUSI_HOLE_COUNT }, (_, i) => {
-            const display = HULUSI_HOLE_COUNT - i;
+        const stateText = HULUSI_FINGERING_TABLE_ORDER.map((display) => {
             return `${display}${hulusiFingeringStateSymbol(hulusiRealFingeringStates[display])}`;
         }).join('  ');
         const acousticText = note.isAcousticEstimate
