@@ -3464,8 +3464,10 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         this.playMode = hulusiPlayMode;
         this.realInteraction = null;
         this.realPointerId = null;
-        this.feedbackTimer = null;
-        this.feedbackScale = null;
+        this.realReleaseTimer = 0;
+        this.activePointerId = null;
+        this.activePointerStartedAt = 0;
+        this.lastSimpleRelease = null;
         this.pointerHandledUntil = 0;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -3788,6 +3790,10 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     startRealFingering: function (pointerId) {
         unlockAudio();
+        if (this.realReleaseTimer) {
+            window.clearTimeout(this.realReleaseTimer);
+            this.realReleaseTimer = 0;
+        }
         this.realPointerId = pointerId;
         const fingering = getHulusiAcousticFingering(hulusiRealFingeringStates);
         if (!this.currentVoice) {
@@ -3808,6 +3814,14 @@ AFRAME.registerComponent('runtime-hulusi-player', {
 
     stopRealFingering: function (pointerId = null, force = false) {
         if (pointerId !== null && this.realPointerId !== null && pointerId !== this.realPointerId) return;
+        if (!force) {
+            window.clearTimeout(this.realReleaseTimer);
+            this.realReleaseTimer = window.setTimeout(() => {
+                this.realReleaseTimer = 0;
+                this.stopRealFingering(pointerId, true);
+            }, 180);
+            return;
+        }
         if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force });
         this.currentVoice = null;
         this.currentFingering = null;
@@ -3880,7 +3894,21 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         }
     },
 
-    findEventInteraction: function (evt) {
+    playHoleTap: function (interaction) {
+        const pointerId = `tap-${Date.now()}`;
+        this.startHole(pointerId, interaction);
+        window.setTimeout(() => {
+            this.stopHole(pointerId);
+            if (!this.active.size) runtimeControlPointerActive = false;
+        }, 260);
+    },
+
+    findEventInteraction: function (evt, options = {}) {
+        const preferScreenHit = options.preferScreenHit !== false;
+        if (preferScreenHit) {
+            const hit = this.raycastInteractives(evt);
+            if (hit && hit.interaction) return hit.interaction;
+        }
         let current = evt.detail && evt.detail.intersection && evt.detail.intersection.object;
         while (current) {
             if (current.userData && current.userData.interaction) {
@@ -3888,50 +3916,53 @@ AFRAME.registerComponent('runtime-hulusi-player', {
             }
             current = current.parent;
         }
-        const hit = this.raycastInteractives(evt);
-        return hit && hit.interaction;
-    },
-
-    playPressFeedback: function () {
-        const model = this.el.object3D;
-        if (!model) return;
-        if (!this.feedbackScale) this.feedbackScale = model.scale.clone();
-        window.clearTimeout(this.feedbackTimer);
-        model.scale.copy(this.feedbackScale).multiplyScalar(1.05);
-        this.feedbackTimer = window.setTimeout(() => {
-            if (this.el && this.el.object3D && this.feedbackScale) {
-                this.el.object3D.scale.copy(this.feedbackScale);
-            }
-        }, 110);
+        if (!preferScreenHit) {
+            const hit = this.raycastInteractives(evt);
+            return hit && hit.interaction;
+        }
+        return null;
     },
 
     handleEntityMouseDown: function (evt) {
         if (!this.el.getAttribute('visible') || !this.isActiveInstrument()) return;
         if (modelGestureMode !== 'interact') return;
         if (isRuntimeUiEvent(evt)) return;
-        const interaction = this.findEventInteraction(evt);
+        const interaction = this.playMode === 'real' ? null : this.findEventInteraction(evt);
         if (this.playMode !== 'real' && (!interaction || interaction.kind !== 'hulusi-hole')) return;
         evt.stopPropagation();
         runtimeControlPointerActive = true;
+        this.activePointerId = getRuntimePointerId(evt);
+        this.activePointerStartedAt = Date.now();
         this.pointerHandledUntil = Date.now() + 220;
-        this.playPressFeedback();
         if (this.playMode === 'real') {
-            this.startRealFingering(getRuntimePointerId(evt));
+            this.startRealFingering(this.activePointerId);
             return;
         }
-        this.startHole(getRuntimePointerId(evt), interaction);
+        this.startHole(this.activePointerId, interaction);
     },
 
     handleEntityMouseUp: function (evt) {
         if (isRuntimeUiEvent(evt)) return;
+        const pointerId = this.activePointerId || getRuntimePointerId(evt);
         if (this.playMode === 'real') {
-            this.stopRealFingering(getRuntimePointerId(evt));
+            this.stopRealFingering(pointerId);
             runtimeControlPointerActive = false;
+            this.activePointerId = null;
+            this.activePointerStartedAt = 0;
             return;
         }
-        const pointerId = getRuntimePointerId(evt);
+        const held = this.active.get(pointerId);
+        if (held) {
+            this.lastSimpleRelease = {
+                time: Date.now(),
+                duration: Date.now() - this.activePointerStartedAt,
+                holeId: held.holeId
+            };
+        }
         this.stopHole(pointerId);
         if (!this.active.size) runtimeControlPointerActive = false;
+        this.activePointerId = null;
+        this.activePointerStartedAt = 0;
     },
 
     handleEntityClick: function (evt) {
@@ -3939,12 +3970,17 @@ AFRAME.registerComponent('runtime-hulusi-player', {
         if (modelGestureMode !== 'interact') return;
         if (this.playMode === 'real') return;
         if (isRuntimeUiEvent(evt)) return;
-        if (Date.now() < this.pointerHandledUntil) return;
         const interaction = this.findEventInteraction(evt);
         if (!interaction || interaction.kind !== 'hulusi-hole') return;
         evt.stopPropagation();
         unlockAudio();
-        this.playPressFeedback();
+        if (Date.now() < this.pointerHandledUntil) {
+            const last = this.lastSimpleRelease;
+            if (last && last.holeId === interaction.id && Date.now() - last.time < 360 && last.duration < 220) {
+                this.playHoleTap(interaction);
+            }
+            return;
+        }
         const displayNumber = hulusiDisplayNumberForHoleId(interaction.id);
         const nextClosed = !this.closedDisplayHoles.has(displayNumber);
         this.setHoleClosedByDisplay(displayNumber, nextClosed);
@@ -3955,7 +3991,7 @@ AFRAME.registerComponent('runtime-hulusi-player', {
     remove: function () {
         this.active.forEach((held, pointerId) => this.stopHole(pointerId, true));
         if (this.currentVoice) releaseHulusiVoice(this.currentVoice, { force: true });
-        window.clearTimeout(this.feedbackTimer);
+        window.clearTimeout(this.realReleaseTimer);
         this.el.removeEventListener('mousedown', this.handleEntityMouseDown);
         this.el.removeEventListener('mouseup', this.handleEntityMouseUp);
         this.el.removeEventListener('click', this.handleEntityClick);
