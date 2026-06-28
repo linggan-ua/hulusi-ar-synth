@@ -325,9 +325,7 @@
 
     .module-light strong {
       font-size: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.15;
     }
 
     .module-light span {
@@ -389,13 +387,17 @@
       user-select: none;
     }
 
+    .knob.effect-knob {
+      border-color: rgba(242, 189, 88, 0.36);
+    }
+
     .dial {
       width: 58px;
       aspect-ratio: 1;
       border-radius: 50%;
       background:
         radial-gradient(circle at 50% 50%, #2c343e 0 36%, transparent 37%),
-        conic-gradient(var(--cyan) calc(var(--value) * 1%), #3a424d 0);
+        conic-gradient(var(--dial-accent, var(--cyan)) calc(var(--value) * 1%), #3a424d 0);
       border: 3px solid #101419;
       box-shadow: inset 0 0 0 1px #53606e, 0 7px 16px rgba(0,0,0,0.32);
       position: relative;
@@ -420,8 +422,31 @@
       box-shadow: 0 0 0 1px rgba(57, 195, 230, 0.38);
     }
 
+    .knob.effect-knob.dragging {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 1px rgba(242, 189, 88, 0.38);
+    }
+
     .knob strong {
       font-size: 12px;
+      text-align: center;
+      line-height: 1.15;
+    }
+
+    .knob strong small,
+    .module-light strong small,
+    .note-card span small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .module-light strong small {
+      font-size: 9px;
     }
 
     .knob span {
@@ -432,10 +457,11 @@
 
     .fader-bank {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
       height: 100%;
       min-height: 270px;
+      align-content: start;
     }
 
     .fader {
@@ -604,35 +630,35 @@
       <section class="synth-card">
         <div class="card-header">
           <strong>WEB SYNTH / FX UNIT</strong>
-          <span>Generic WebAudio synthesizer / live parameter control</span>
+          <span>通用 WebAudio 合成器 / Generic live parameter control</span>
         </div>
         <div class="synth-panel">
           <div class="signal-strip" id="signalStrip"></div>
 
           <div class="hardware-grid">
             <div class="hardware-section">
-              <div class="section-label"><span>Oscillator / Modulation</span><span id="engineReadout">READY</span></div>
+              <div class="section-label"><span>振荡 / 调制 Oscillator / Modulation</span><span id="engineReadout">READY</span></div>
               <div class="knob-grid" id="knobGrid"></div>
             </div>
 
             <div class="hardware-section">
-              <div class="section-label"><span>Filter / Effects Faders</span><span>实时可调</span></div>
+              <div class="section-label"><span>滤波 / 效果 Filter / Effects</span><span>实时可调</span></div>
               <div class="fader-bank" id="faderBank"></div>
             </div>
           </div>
 
           <div class="bottom-row">
             <div class="scope" id="scope">
-              <div class="section-label"><span>Output Scope</span><span id="scopeText">waiting input</span></div>
+              <div class="section-label"><span>输出示波 Output Scope</span><span id="scopeText">waiting input</span></div>
               <canvas id="scopeCanvas" width="720" height="180" aria-label="实时音频波形"></canvas>
             </div>
             <div class="note-card">
-              <div><span>OSC LEVEL</span><strong id="metricOsc">0.36</strong></div>
-              <div><span>NOISE MIX</span><strong id="metricNoise">0.019</strong></div>
-              <div><span>TONE FREQ</span><strong id="metricTone">862 Hz</strong></div>
-              <div><span>FORMANT</span><strong id="metricFormant">365 Hz</strong></div>
-              <div><span>MOD DEPTH</span><strong id="metricMod">5.8 ct</strong></div>
-              <div><span>MASTER</span><strong id="metricOut">0.58</strong></div>
+              <div><span>振荡电平 <small>OSC LEVEL</small></span><strong id="metricOsc">0.36</strong></div>
+              <div><span>噪声混合 <small>NOISE MIX</small></span><strong id="metricNoise">0.019</strong></div>
+              <div><span>音色频率 <small>TONE FREQ</small></span><strong id="metricTone">862 Hz</strong></div>
+              <div><span>共振峰 <small>FORMANT</small></span><strong id="metricFormant">365 Hz</strong></div>
+              <div><span>调制深度 <small>MOD DEPTH</small></span><strong id="metricMod">5.8 ct</strong></div>
+              <div><span>主输出 <small>MASTER</small></span><strong id="metricOut">0.58</strong></div>
             </div>
           </div>
         </div>
@@ -642,27 +668,27 @@
 
   <script>
     const signalModules = [
-      ["input", "INPUT", "trigger / gate"],
-      ["osc", "OSC", "level / harmonic"],
-      ["noise", "NOISE", "mix / transient"],
-      ["filter", "FILTER", "tone / resonance"],
-      ["mod", "MOD", "vibrato / motion"],
-      ["output", "OUTPUT", "envelope / level"]
+      ["input", "输入 INPUT", "触发 / 门限 trigger / gate"],
+      ["osc", "振荡 OSC", "电平 / 谐波 level / harmonic"],
+      ["noise", "噪声 NOISE", "混合 / 瞬态 mix / transient"],
+      ["filter", "滤波 FILTER", "音色 / 共振 tone / resonance"],
+      ["mod", "调制 MOD", "颤音 / 运动 vibrato / motion"],
+      ["output", "输出 OUTPUT", "包络 / 电平 envelope / level"]
     ];
 
     const controls = [
-      { id: "oscLevel", target: "reedSustain", label: "OSC LEVEL", kind: "knob", value: 0.36, base: 0.36, min: 0.04, max: 0.90, step: 0.005, unit: "", digits: 3 },
-      { id: "toneFreq", target: "pipeFrequency", label: "TONE FREQ", kind: "knob", value: 862, base: 862, min: 360, max: 2200, step: 1, unit: "Hz", digits: 0 },
-      { id: "formantFreq", target: "gourdFrequency", label: "FORMANT", kind: "knob", value: 365, base: 365, min: 140, max: 960, step: 1, unit: "Hz", digits: 0 },
-      { id: "colorFreq", target: "nasalFrequency", label: "COLOR", kind: "knob", value: 880, base: 880, min: 260, max: 2600, step: 1, unit: "Hz", digits: 0 },
-      { id: "modDepth", target: "vibratoDepth", label: "MOD DEPTH", kind: "knob", value: 5.8, base: 5.8, min: 0, max: 18, step: 0.1, unit: "ct", digits: 1 },
-      { id: "shapeDrive", target: "pressureDepth", label: "DRIVE", kind: "knob", value: 0.04, base: 0.04, min: 0, max: 0.18, step: 0.001, unit: "", digits: 3 },
-      { id: "noiseMix", target: "breathSustain", label: "NOISE MIX", kind: "fader", value: 0.022, base: 0.022, min: 0, max: 0.16, step: 0.001, unit: "", digits: 3 },
-      { id: "transientFreq", target: "chiffFrequency", label: "TRANSIENT", kind: "fader", value: 2700, base: 2700, min: 600, max: 6200, step: 1, unit: "Hz", digits: 0 },
-      { id: "filterQ", target: "pipeQ", label: "FILTER Q", kind: "fader", value: 3.2, base: 3.2, min: 0.4, max: 8.5, step: 0.01, unit: "Q", digits: 2 },
-      { id: "filterGain", target: "pipeGain", label: "FILTER GAIN", kind: "fader", value: 7.0, base: 7.0, min: 0.5, max: 12, step: 0.01, unit: "dB", digits: 2 },
-      { id: "airCutoff", target: "airLowpassFrequency", label: "AIR CUTOFF", kind: "fader", value: 3550, base: 3550, min: 700, max: 8800, step: 1, unit: "Hz", digits: 0 },
-      { id: "masterLevel", target: "outputSustain", label: "MASTER", kind: "fader", value: 0.58, base: 0.58, min: 0.04, max: 1.0, step: 0.005, unit: "", digits: 3 }
+      { id: "oscLevel", target: "reedSustain", label: "振荡电平", sublabel: "OSC LEVEL", kind: "knob", value: 0.36, base: 0.36, min: 0.04, max: 0.90, step: 0.005, unit: "", digits: 3 },
+      { id: "toneFreq", target: "pipeFrequency", label: "音色频率", sublabel: "TONE FREQ", kind: "knob", value: 862, base: 862, min: 360, max: 2200, step: 1, unit: "Hz", digits: 0 },
+      { id: "formantFreq", target: "gourdFrequency", label: "共振峰", sublabel: "FORMANT", kind: "knob", value: 365, base: 365, min: 140, max: 960, step: 1, unit: "Hz", digits: 0 },
+      { id: "colorFreq", target: "nasalFrequency", label: "音色染色", sublabel: "COLOR", kind: "knob", value: 880, base: 880, min: 260, max: 2600, step: 1, unit: "Hz", digits: 0 },
+      { id: "modDepth", target: "vibratoDepth", label: "调制深度", sublabel: "MOD DEPTH", kind: "knob", value: 5.8, base: 5.8, min: 0, max: 18, step: 0.1, unit: "ct", digits: 1 },
+      { id: "shapeDrive", target: "pressureDepth", label: "波形驱动", sublabel: "DRIVE", kind: "knob", value: 0.04, base: 0.04, min: 0, max: 0.18, step: 0.001, unit: "", digits: 3 },
+      { id: "noiseMix", target: "breathSustain", label: "噪声混合", sublabel: "NOISE MIX", kind: "effect", value: 0.022, base: 0.022, min: 0, max: 0.16, step: 0.001, unit: "", digits: 3 },
+      { id: "transientFreq", target: "chiffFrequency", label: "瞬态频率", sublabel: "TRANSIENT", kind: "effect", value: 2700, base: 2700, min: 600, max: 6200, step: 1, unit: "Hz", digits: 0 },
+      { id: "filterQ", target: "pipeQ", label: "滤波 Q 值", sublabel: "FILTER Q", kind: "effect", value: 3.2, base: 3.2, min: 0.4, max: 8.5, step: 0.01, unit: "Q", digits: 2 },
+      { id: "filterGain", target: "pipeGain", label: "滤波增益", sublabel: "FILTER GAIN", kind: "effect", value: 7.0, base: 7.0, min: 0.5, max: 12, step: 0.01, unit: "dB", digits: 2 },
+      { id: "airCutoff", target: "airLowpassFrequency", label: "空气截止", sublabel: "AIR CUTOFF", kind: "effect", value: 3550, base: 3550, min: 700, max: 8800, step: 1, unit: "Hz", digits: 0 },
+      { id: "masterLevel", target: "outputSustain", label: "主输出", sublabel: "MASTER", kind: "effect", value: 0.58, base: 0.58, min: 0.04, max: 1.0, step: 0.005, unit: "", digits: 3 }
     ];
 
     const state = {
@@ -724,7 +750,7 @@
     function renderModules() {
       document.getElementById("signalStrip").innerHTML = signalModules.map(([id, name, desc]) => `
         <div class="module-light" data-module="${id}">
-          <strong>${name}</strong>
+          <strong>${name.replace(" ", "<small>")}${name.includes(" ") ? "</small>" : ""}</strong>
           <span>${desc}</span>
           <em data-module-value="${id}">-</em>
         </div>
@@ -738,20 +764,21 @@
       faderBank.innerHTML = "";
       controls.forEach((control) => {
         const percent = ((control.value - control.min) / (control.max - control.min)) * 100;
-        if (control.kind === "knob") {
+        if (control.kind === "knob" || control.kind === "effect") {
           const node = document.createElement("div");
-          node.className = "knob";
+          node.className = control.kind === "effect" ? "knob effect-knob" : "knob";
+          const accent = control.kind === "effect" ? "var(--amber)" : "var(--cyan)";
           node.innerHTML = `
-            <div class="dial" data-dial="${control.id}" style="--value:${percent}" role="slider" aria-label="${control.label}" aria-valuemin="${control.min}" aria-valuemax="${control.max}" aria-valuenow="${control.value}" tabindex="0"></div>
-            <strong>${control.label}</strong>
+            <div class="dial" data-dial="${control.id}" style="--value:${percent}; --dial-accent:${accent}" role="slider" aria-label="${control.label} ${control.sublabel}" aria-valuemin="${control.min}" aria-valuemax="${control.max}" aria-valuenow="${control.value}" tabindex="0"></div>
+            <strong>${control.label}<small>${control.sublabel}</small></strong>
             <span data-control-value="${control.id}">${formatControlValue(control)}</span>
           `;
-          knobGrid.appendChild(node);
+          (control.kind === "effect" ? faderBank : knobGrid).appendChild(node);
         } else {
           const node = document.createElement("div");
           node.className = "fader";
           node.innerHTML = `
-            <strong>${control.label}</strong>
+            <strong>${control.label}<small>${control.sublabel}</small></strong>
             <input type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${control.value}" data-control="${control.id}">
             <span data-control-value="${control.id}">${formatControlValue(control)}</span>
           `;
