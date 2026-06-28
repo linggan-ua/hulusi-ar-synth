@@ -5191,7 +5191,9 @@ AFRAME.registerComponent('instrument-handler', {
         this.setActiveInstrument();
         restoreOutputForMarkerFound();
         if (this.config.isLoaded) {
-            this.modelEntity.setAttribute('visible', true);
+            if (this.marker.object3D.visible) {
+                 this.modelEntity.setAttribute('visible', true);
+            }
         } else {
             this.loadResources();
         }
@@ -5253,7 +5255,9 @@ AFRAME.registerComponent('instrument-handler', {
             this.config.isLoaded = true;
             loadTextResources();
             hideLoadingOverlay(true);
-            this.modelEntity.setAttribute('visible', true);
+            if (this.marker.object3D.visible) {
+                 this.modelEntity.setAttribute('visible', true);
+            }
             return;
         }
         
@@ -6498,7 +6502,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <a-entity id="model27" position="0 0 0" rotation="0 0 0" touch-handler="minScale: 0.45; maxScale: 2.8" visible="false"></a-entity>
    </a-marker>
    <a-marker id="marker28" type="pattern" url="assets/patterns/pattern-hulusi.patt" instrument-handler>
-        <a-entity id="model28" position="0 0.10 -4.8" rotation="0 0 0" scale="0.14 0.14 0.14" touch-handler="minScale: 0.08; maxScale: 1.2" visible="false"></a-entity>
+        <a-entity id="model28" position="0 0 0" rotation="0 0 0" touch-handler="minScale: 0.45; maxScale: 2.8" visible="false"></a-entity>
    </a-marker>
    <a-entity camera cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .playable"></a-entity>
   </a-scene>
